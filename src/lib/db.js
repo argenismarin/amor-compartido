@@ -32,6 +32,10 @@ export async function initDatabase() {
   if (users.length === 0) {
     await query(`INSERT INTO AppChecklist_users (name, avatar_emoji) VALUES ('Jenifer', '💕')`);
     await query(`INSERT INTO AppChecklist_users (name, avatar_emoji) VALUES ('Argenis', '🍷')`);
+  } else {
+    // Update existing users to correct names
+    await query(`UPDATE AppChecklist_users SET name = 'Jenifer', avatar_emoji = '💕' WHERE id = 1`);
+    await query(`UPDATE AppChecklist_users SET name = 'Argenis', avatar_emoji = '🍷' WHERE id = 2`);
   }
 
   // Create tasks table
