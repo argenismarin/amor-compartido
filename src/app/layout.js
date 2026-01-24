@@ -1,11 +1,4 @@
-import localFont from "next/font/local";
 import "./globals.css";
-
-const inter = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
 
 export const metadata = {
   title: "Amor Compartido",
@@ -33,9 +26,10 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className={inter.variable}>
+      <body>
         {children}
       </body>
     </html>
   );
 }
+
