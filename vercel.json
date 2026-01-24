@@ -1,9 +1,6 @@
 {
-    "env": {
-        "MYSQL_HOST": "@mysql-host",
-        "MYSQL_PORT": "@mysql-port",
-        "MYSQL_USER": "@mysql-user",
-        "MYSQL_PASSWORD": "@mysql-password",
-        "MYSQL_DATABASE": "@mysql-database"
-    }
+    "buildCommand": "npm run build",
+    "devCommand": "npm run dev",
+    "installCommand": "npm install",
+    "framework": "nextjs"
 }
