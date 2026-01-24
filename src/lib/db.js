@@ -30,8 +30,8 @@ export async function initDatabase() {
   // Check if users exist, if not create default users
   const users = await query('SELECT * FROM AppChecklist_users');
   if (users.length === 0) {
-    await query(`INSERT INTO AppChecklist_users (name, avatar_emoji) VALUES ('Usuario 1', '💕')`);
-    await query(`INSERT INTO AppChecklist_users (name, avatar_emoji) VALUES ('Usuario 2', '💖')`);
+    await query(`INSERT INTO AppChecklist_users (name, avatar_emoji) VALUES ('Jenifer', '💕')`);
+    await query(`INSERT INTO AppChecklist_users (name, avatar_emoji) VALUES ('Argenis', '🍷')`);
   }
 
   // Create tasks table

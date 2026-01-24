@@ -14,6 +14,12 @@
   --warning: #FF9800;
   --border: #E0E0E0;
   --shadow: rgba(244, 143, 177, 0.3);
+
+  /* Argenis - Vinotinto/Burgundy */
+  --burgundy: #722F37;
+  --burgundy-light: #F3E5E7;
+  --burgundy-dark: #5C252D;
+  --burgundy-shadow: rgba(114, 47, 55, 0.3);
 }
 
 * {
@@ -31,6 +37,163 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ============================================
+   ARGENIS THEME - Vinotinto/Burgundy Elegante
+   ============================================ */
+[data-user="argenis"] .header {
+  background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+  box-shadow: 0 4px 20px var(--burgundy-shadow);
+}
+
+[data-user="argenis"] .user-btn.active {
+  color: var(--burgundy-dark);
+}
+
+[data-user="argenis"] .progress-section {
+  background: linear-gradient(135deg, var(--burgundy-light) 0%, white 100%);
+}
+
+[data-user="argenis"] .progress-percentage,
+[data-user="argenis"] .stat-value {
+  color: var(--burgundy);
+}
+
+[data-user="argenis"] .progress-bar {
+  background: linear-gradient(90deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+}
+
+[data-user="argenis"] .tab.active {
+  background: var(--burgundy);
+  box-shadow: 0 4px 15px var(--burgundy-shadow);
+}
+
+[data-user="argenis"] .tab:hover:not(.active) {
+  background: var(--burgundy-light);
+  color: var(--burgundy);
+}
+
+[data-user="argenis"] .task-checkbox {
+  border-color: var(--burgundy);
+}
+
+[data-user="argenis"] .task-checkbox:hover {
+  background: var(--burgundy-light);
+}
+
+[data-user="argenis"] .fab {
+  background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+  box-shadow: 0 6px 25px var(--burgundy-shadow);
+}
+
+[data-user="argenis"] .fab:hover {
+  box-shadow: 0 8px 30px var(--burgundy-shadow);
+}
+
+[data-user="argenis"] .submit-btn {
+  background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+}
+
+[data-user="argenis"] .submit-btn:hover {
+  box-shadow: 0 6px 20px var(--burgundy-shadow);
+}
+
+[data-user="argenis"] .form-input:focus,
+[data-user="argenis"] .form-textarea:focus,
+[data-user="argenis"] .form-select:focus {
+  border-color: var(--burgundy);
+  box-shadow: 0 0 0 4px var(--burgundy-light);
+}
+
+[data-user="argenis"] .modal-close:hover {
+  background: var(--burgundy-light);
+}
+
+[data-user="argenis"] .task-action-btn:hover {
+  background: var(--burgundy-light);
+}
+
+[data-user="argenis"] .assign-option:hover,
+[data-user="argenis"] .assign-option.selected {
+  border-color: var(--burgundy);
+  background: var(--burgundy-light);
+}
+
+[data-user="argenis"] .priority-option:hover {
+  border-color: var(--burgundy);
+}
+
+[data-user="argenis"] .priority-option.selected:not(.high):not(.low) {
+  border-color: var(--burgundy);
+  background: var(--burgundy-light);
+  color: var(--burgundy);
+}
+
+[data-user="argenis"] .loading-spinner {
+  border-color: var(--burgundy-light);
+  border-top-color: var(--burgundy);
+}
+
+/* ============================================
+   TASK CARD COLORS - Based on who assigned
+   ============================================ */
+
+/* Tasks assigned by Jenifer (pink left border) */
+.task-card.from-jenifer {
+  border-left-color: var(--primary);
+}
+
+.task-card.from-jenifer .task-checkbox {
+  border-color: var(--primary);
+}
+
+/* Tasks assigned by Argenis (burgundy left border) */
+.task-card.from-argenis {
+  border-left-color: var(--burgundy);
+}
+
+.task-card.from-argenis .task-checkbox {
+  border-color: var(--burgundy);
+}
+
+.task-card.from-argenis .task-checkbox:hover {
+  background: var(--burgundy-light);
+}
+
+/* ============================================
+   COLLAPSIBLE COLORS - Dynamic based on user
+   ============================================ */
+[data-user="argenis"] .collapsible {
+  background: var(--primary-light);
+}
+
+[data-user="argenis"] .collapsible-title {
+  color: var(--primary-dark);
+}
+
+[data-user="argenis"] .collapsible-badge {
+  background: var(--primary);
+}
+
+[data-user="argenis"] .collapsible-header:hover {
+  background: rgba(244, 143, 177, 0.2);
+}
+
+[data-user="jenifer"] .collapsible {
+  background: var(--burgundy-light);
+}
+
+[data-user="jenifer"] .collapsible-title {
+  color: var(--burgundy);
+}
+
+[data-user="jenifer"] .collapsible-badge {
+  background: var(--burgundy);
+}
+
+[data-user="jenifer"] .collapsible-header:hover {
+  background: rgba(114, 47, 55, 0.1);
+}
+
 /* Header */
 .header {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
@@ -41,6 +204,7 @@ body {
   z-index: 100;
   box-shadow: 0 4px 20px var(--shadow);
 }
+
 
 .header-content {
   display: flex;
@@ -425,11 +589,11 @@ body {
     right: 20px;
     transform: none;
   }
-  
+
   .fab:hover {
     transform: scale(1.1);
   }
-  
+
   .fab:active {
     transform: scale(0.95);
   }
@@ -451,8 +615,13 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .modal {
@@ -467,8 +636,13 @@ body {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 .modal-header {
@@ -676,7 +850,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Mobile optimizations */
@@ -685,17 +861,17 @@ body {
     flex-direction: column;
     gap: 12px;
   }
-  
+
   .user-toggle {
     width: 100%;
     justify-content: center;
   }
-  
+
   .main {
     padding: 16px;
     padding-bottom: 100px;
   }
-  
+
   .tabs {
     justify-content: center;
   }
@@ -706,11 +882,11 @@ body {
   .header {
     padding-top: max(16px, env(safe-area-inset-top));
   }
-  
+
   .fab {
     bottom: max(30px, calc(env(safe-area-inset-bottom) + 20px));
   }
-  
+
   .modal {
     padding-bottom: max(24px, env(safe-area-inset-bottom));
   }

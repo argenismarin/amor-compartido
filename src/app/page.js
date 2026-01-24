@@ -163,6 +163,9 @@ export default function Home() {
   const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const getOtherUser = () => users.find(u => u.id !== currentUser?.id);
+  
+  // Check if current user is Argenis (user id 2 or name contains Argenis)
+  const isArgenis = currentUser?.name?.toLowerCase().includes('argenis') || currentUser?.id === 2;
 
   if (loading) {
     return (
@@ -173,7 +176,7 @@ export default function Home() {
   }
 
   return (
-    <>
+    <div data-user={isArgenis ? 'argenis' : 'jenifer'}>
       {/* Header */}
       <header className="header">
         <div className="header-content">
@@ -245,6 +248,7 @@ export default function Home() {
                       onEdit={openEditTask}
                       onDelete={handleTaskDelete}
                       showAssignedBy={false}
+                      assignedByName={task.assigned_by_name}
                     />
                   ))}
                 </div>
@@ -292,6 +296,7 @@ export default function Home() {
                 onDelete={handleTaskDelete}
                 showAssignedBy={activeTab === 'myTasks'}
                 currentUserId={currentUser?.id}
+                assignedByName={task.assigned_by_name}
               />
             ))
           )}
@@ -384,20 +389,25 @@ export default function Home() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
 // TaskCard Component
-function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUserId }) {
+function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUserId, assignedByName }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
     const date = new Date(dateStr);
     return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
   };
 
+  // Determine if assigned by Jenifer (pink) or Argenis (burgundy)
+  const isFromJenifer = assignedByName?.toLowerCase().includes('jenifer');
+  const isFromArgenis = assignedByName?.toLowerCase().includes('argenis');
+  const fromClass = isFromJenifer ? 'from-jenifer' : isFromArgenis ? 'from-argenis' : '';
+
   return (
-    <div className={`task-card ${task.is_completed ? 'completed' : ''} priority-${task.priority}`}>
+    <div className={`task-card ${task.is_completed ? 'completed' : ''} priority-${task.priority} ${fromClass}`}>
       <div className="task-header">
         <div
           className={`task-checkbox ${task.is_completed ? 'checked' : ''}`}
