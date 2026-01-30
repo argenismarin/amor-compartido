@@ -2014,4 +2014,179 @@ body {
   .special-date-banner {
     background: linear-gradient(135deg, #B8860B 0%, #DAA520 100%);
   }
+
+  /* ============================================
+     DARK MODE - ACCESSIBILITY FIXES
+     ============================================ */
+
+  /* Fix assign option - background and text contrast */
+  .assign-option {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  .assign-name {
+    color: var(--text);
+  }
+
+  /* Fix priority option - background for non-selected state */
+  .priority-option {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .priority-option.low,
+  .priority-option.high {
+    color: var(--text);
+  }
+
+  .priority-option.low.selected {
+    background: rgba(25, 118, 210, 0.3);
+    color: #90CAF9;
+  }
+
+  .priority-option.high.selected {
+    background: rgba(229, 57, 53, 0.3);
+    color: #EF9A9A;
+  }
+
+  /* Fix category and recurrence options text */
+  .category-option,
+  .recurrence-option {
+    color: var(--text);
+  }
+
+  .category-option.selected,
+  .recurrence-option.selected {
+    color: var(--text);
+  }
+
+  /* Fix form placeholders */
+  .form-input::placeholder,
+  .form-textarea::placeholder {
+    color: var(--text-light);
+    opacity: 0.8;
+  }
+
+  /* Fix modal title */
+  .modal-title {
+    color: var(--text);
+  }
+
+  /* Fix empty state */
+  .empty-state-title {
+    color: var(--text);
+  }
+
+  /* Fix progress section text */
+  .progress-title {
+    color: var(--text);
+  }
+
+  .progress-percentage {
+    color: var(--primary);
+  }
+
+  [data-user="argenis"] .progress-percentage {
+    color: var(--burgundy-light);
+  }
+
+  .stat-value {
+    color: var(--primary);
+  }
+
+  [data-user="argenis"] .stat-value {
+    color: var(--burgundy-light);
+  }
+
+  /* Fix tab inactive text */
+  .tab {
+    color: var(--text);
+  }
+
+  .tab:hover:not(.active) {
+    color: var(--text);
+  }
+
+  /* Fix collapsible title */
+  .collapsible-title {
+    color: var(--primary);
+  }
+
+  [data-user="argenis"] .collapsible-title {
+    color: var(--primary);
+  }
+
+  [data-user="jenifer"] .collapsible-title {
+    color: var(--burgundy-light);
+  }
+
+  /* Fix task card text */
+  .task-title {
+    color: var(--text);
+  }
+
+  .task-card.completed .task-title {
+    color: var(--text-light);
+  }
+
+  /* Fix form labels */
+  .form-label {
+    color: var(--text);
+  }
+
+  /* Fix history modal */
+  .history-item-title {
+    color: var(--text);
+  }
+
+  .history-stat-value {
+    color: var(--primary);
+  }
+
+  [data-user="argenis"] .history-stat-value {
+    color: var(--burgundy-light);
+  }
+
+  /* Fix achievements modal */
+  .achievement-name {
+    color: var(--text);
+  }
+
+  .achievement-unlock-name {
+    color: var(--text);
+  }
+
+  .achievements-stat-value {
+    color: var(--primary);
+  }
+
+  [data-user="argenis"] .achievements-stat-value {
+    color: var(--burgundy-light);
+  }
+
+  /* Fix settings modal */
+  .settings-section-title {
+    color: var(--text);
+  }
+
+  .settings-stat {
+    background: var(--background);
+  }
+
+  /* Fix confirm dialog text */
+  .confirm-message {
+    color: var(--text);
+  }
+
+  /* Fix add reaction button */
+  .add-reaction-btn {
+    color: var(--text-light);
+    border-color: var(--border);
+  }
+
+  .add-reaction-btn:hover {
+    background: rgba(244, 143, 177, 0.2);
+    color: var(--text);
+  }
 }
