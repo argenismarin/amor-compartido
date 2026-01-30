@@ -2050,15 +2050,46 @@ body {
     color: #EF9A9A;
   }
 
-  /* Fix category and recurrence options text */
+  /* Fix category and recurrence options - background and text */
   .category-option,
   .recurrence-option {
+    background: var(--surface);
     color: var(--text);
   }
 
   .category-option.selected,
   .recurrence-option.selected {
+    background: rgba(244, 143, 177, 0.25);
+    border-color: var(--primary);
     color: var(--text);
+  }
+
+  [data-user="argenis"] .category-option.selected,
+  [data-user="argenis"] .recurrence-option.selected {
+    background: rgba(114, 47, 55, 0.35);
+    border-color: var(--burgundy-light);
+    color: var(--text);
+  }
+
+  /* Fix category chips in filter */
+  .category-chip {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .category-chip:hover {
+    background: rgba(244, 143, 177, 0.2);
+    color: var(--text);
+  }
+
+  .category-chip.active {
+    background: var(--primary);
+    color: white;
+  }
+
+  [data-user="argenis"] .category-chip.active {
+    background: var(--burgundy);
+    color: white;
   }
 
   /* Fix form placeholders */
