@@ -7,31 +7,47 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const filter = searchParams.get('filter');
+    const categoryId = searchParams.get('categoryId');
 
     let sql = `
       SELECT t.*,
         u_to.name as assigned_to_name, u_to.avatar_emoji as assigned_to_avatar,
-        u_by.name as assigned_by_name, u_by.avatar_emoji as assigned_by_avatar
+        u_by.name as assigned_by_name, u_by.avatar_emoji as assigned_by_avatar,
+        c.name as category_name, c.emoji as category_emoji, c.color as category_color
       FROM AppChecklist_tasks t
       JOIN AppChecklist_users u_to ON t.assigned_to = u_to.id
       JOIN AppChecklist_users u_by ON t.assigned_by = u_by.id
+      LEFT JOIN AppChecklist_categories c ON t.category_id = c.id
     `;
 
     let params = [];
     let paramIndex = 1;
+    let whereAdded = false;
+
+    const addWhere = (condition) => {
+      sql += whereAdded ? ' AND ' : ' WHERE ';
+      sql += condition;
+      whereAdded = true;
+    };
 
     if (userId && filter === 'myTasks') {
-      sql += ` WHERE t.assigned_to = $${paramIndex}`;
+      addWhere(`t.assigned_to = $${paramIndex}`);
       params.push(userId);
       paramIndex++;
     } else if (userId && filter === 'assignedByOther') {
-      sql += ` WHERE t.assigned_to = $${paramIndex} AND t.assigned_by != $${paramIndex + 1}`;
+      addWhere(`t.assigned_to = $${paramIndex} AND t.assigned_by != $${paramIndex + 1}`);
       params.push(userId, userId);
       paramIndex += 2;
     } else if (userId && filter === 'assignedToOther') {
-      sql += ` WHERE t.assigned_by = $${paramIndex} AND t.assigned_to != $${paramIndex + 1}`;
+      addWhere(`t.assigned_by = $${paramIndex} AND t.assigned_to != $${paramIndex + 1}`);
       params.push(userId, userId);
       paramIndex += 2;
+    }
+
+    if (categoryId) {
+      addWhere(`t.category_id = $${paramIndex}`);
+      params.push(categoryId);
+      paramIndex++;
     }
 
     sql += ' ORDER BY t.is_completed ASC, t.priority DESC, t.created_at DESC';
@@ -46,12 +62,13 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { title, description, assigned_to, assigned_by, due_date, priority } = await request.json();
+    const { title, description, assigned_to, assigned_by, due_date, priority, category_id, recurrence, recurrence_days } = await request.json();
 
     const result = await queryOne(
-      `INSERT INTO AppChecklist_tasks (title, description, assigned_to, assigned_by, due_date, priority)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [title, description || null, assigned_to, assigned_by, due_date || null, priority || 'medium']
+      `INSERT INTO AppChecklist_tasks (title, description, assigned_to, assigned_by, due_date, priority, category_id, recurrence, recurrence_days)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [title, description || null, assigned_to, assigned_by, due_date || null, priority || 'medium',
+       category_id || null, recurrence || null, recurrence_days || null]
     );
 
     return NextResponse.json({ success: true, id: result.id });

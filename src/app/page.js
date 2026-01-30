@@ -1,6 +1,29 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+
+// Mensajes motivacionales variados
+const MOTIVATIONAL_MESSAGES = [
+  '¡Excelente trabajo! 🎉',
+  '¡Eres increíble! 💪',
+  '¡Sigue así, campeón/a! 🏆',
+  '¡Lo lograste! 🌟',
+  '¡Tarea completada con éxito! ✨',
+  '¡Un paso más hacia la meta! 🚀',
+  '¡Fantástico trabajo! 💕',
+  '¡Qué crack eres! 🔥',
+  '¡Productividad al máximo! ⚡',
+  '¡Equipo imparable! 💑',
+  '¡Así se hace! 👏',
+  '¡Nada te detiene! 💫',
+  '¡Orgulloso/a de ti! 🥰',
+  '¡Cada tarea cuenta! 🎯',
+  '¡Victoria tras victoria! 🏅',
+  '¡Imparable! 💥',
+];
+
+// Emojis de corazones para las animaciones
+const HEART_EMOJIS = ['💕', '❤️', '💖', '💗', '💝', '💓', '💞', '🩷'];
 
 export default function Home() {
   const [users, setUsers] = useState([]);
@@ -23,14 +46,44 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [togglingTaskId, setTogglingTaskId] = useState(null);
 
+  // Celebration states
+  const [floatingHearts, setFloatingHearts] = useState([]);
+  const [confetti, setConfetti] = useState([]);
+  const [celebrationBanner, setCelebrationBanner] = useState(null);
+  const prevProgressRef = useRef(0);
+
+  // Gamification states
+  const [streak, setStreak] = useState({ current_streak: 0, best_streak: 0 });
+  const [achievements, setAchievements] = useState([]);
+  const [newAchievement, setNewAchievement] = useState(null);
+  const [showAchievementsModal, setShowAchievementsModal] = useState(false);
+
+  // Categories state
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+
+  // History state
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [history, setHistory] = useState({ tasks: [], stats: { thisWeek: 0, total: 0 } });
+
+  // Settings/Special dates state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [specialDates, setSpecialDates] = useState([]);
+  const [todaySpecialDate, setTodaySpecialDate] = useState(null);
+
   // Form state
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     assigned_to: null,
     due_date: '',
-    priority: 'medium'
+    priority: 'medium',
+    category_id: null,
+    recurrence: null
   });
+
+  // Reaction emojis
+  const REACTION_EMOJIS = ['💕', '❤️', '👏', '🎉', '😍'];
 
   // Toast helper function
   const showToast = useCallback((message, type = 'success') => {
@@ -38,9 +91,60 @@ export default function Home() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  // Get random motivational message
+  const getRandomMessage = useCallback(() => {
+    return MOTIVATIONAL_MESSAGES[Math.floor(Math.random() * MOTIVATIONAL_MESSAGES.length)];
+  }, []);
+
+  // Trigger floating hearts animation
+  const triggerFloatingHearts = useCallback(() => {
+    const newHearts = [];
+    const numHearts = 6 + Math.floor(Math.random() * 3); // 6-8 hearts
+
+    for (let i = 0; i < numHearts; i++) {
+      newHearts.push({
+        id: Date.now() + i,
+        emoji: HEART_EMOJIS[Math.floor(Math.random() * HEART_EMOJIS.length)],
+        left: 30 + Math.random() * 40, // 30-70% from left
+        delay: Math.random() * 0.3,
+      });
+    }
+
+    setFloatingHearts(newHearts);
+    setTimeout(() => setFloatingHearts([]), 2000);
+  }, []);
+
+  // Trigger confetti animation
+  const triggerConfetti = useCallback(() => {
+    const newConfetti = [];
+    const numPieces = 50;
+
+    for (let i = 0; i < numPieces; i++) {
+      const shapes = ['circle', 'square', 'heart'];
+      newConfetti.push({
+        id: Date.now() + i,
+        left: Math.random() * 100,
+        delay: Math.random() * 0.5,
+        shape: shapes[Math.floor(Math.random() * shapes.length)],
+        size: 6 + Math.random() * 8,
+      });
+    }
+
+    setConfetti(newConfetti);
+    setTimeout(() => setConfetti([]), 3500);
+  }, []);
+
+  // Show celebration banner
+  const showCelebrationBanner = useCallback((text, subtext) => {
+    setCelebrationBanner({ text, subtext });
+    setTimeout(() => setCelebrationBanner(null), 3000);
+  }, []);
+
   // Fetch users on mount
   useEffect(() => {
     fetchUsers();
+    fetchCategories();
+    fetchSpecialDates();
   }, []);
 
   // Fetch tasks when user changes
@@ -48,8 +152,15 @@ export default function Home() {
     if (currentUser) {
       fetchTasks();
       fetchAssignedByOther();
+      fetchStreak();
+      fetchAchievements();
     }
-  }, [currentUser, activeTab]);
+  }, [currentUser, activeTab, selectedCategory]);
+
+  // Check for today's special date
+  useEffect(() => {
+    checkTodaySpecialDate();
+  }, [specialDates]);
 
   const fetchUsers = async () => {
     try {
@@ -72,17 +183,112 @@ export default function Home() {
   const fetchTasks = async () => {
     try {
       let url = '/api/tasks';
+      const params = new URLSearchParams();
+
       if (activeTab === 'myTasks') {
-        url += `?userId=${currentUser.id}&filter=myTasks`;
+        params.set('userId', currentUser.id);
+        params.set('filter', 'myTasks');
       } else if (activeTab === 'assignedToOther') {
-        url += `?userId=${currentUser.id}&filter=assignedToOther`;
+        params.set('userId', currentUser.id);
+        params.set('filter', 'assignedToOther');
       }
+
+      if (selectedCategory) {
+        params.set('categoryId', selectedCategory);
+      }
+
+      url += `?${params.toString()}`;
       const res = await fetch(url);
       const data = await res.json();
       setTasks(data);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       showToast('Error al cargar tareas', 'error');
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('/api/categories');
+      const data = await res.json();
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchStreak = async () => {
+    try {
+      const res = await fetch(`/api/streaks?userId=${currentUser.id}`);
+      const data = await res.json();
+      setStreak(data);
+    } catch (error) {
+      console.error('Error fetching streak:', error);
+    }
+  };
+
+  const fetchAchievements = async () => {
+    try {
+      const res = await fetch(`/api/achievements?userId=${currentUser.id}`);
+      const data = await res.json();
+      setAchievements(data);
+    } catch (error) {
+      console.error('Error fetching achievements:', error);
+    }
+  };
+
+  const fetchSpecialDates = async () => {
+    try {
+      const res = await fetch('/api/special-dates');
+      const data = await res.json();
+      setSpecialDates(data);
+    } catch (error) {
+      console.error('Error fetching special dates:', error);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch(`/api/history?userId=${currentUser.id}`);
+      const data = await res.json();
+      setHistory(data);
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    }
+  };
+
+  const checkTodaySpecialDate = () => {
+    const today = new Date();
+    const todayMonth = today.getMonth() + 1;
+    const todayDay = today.getDate();
+
+    for (const specialDate of specialDates) {
+      const dateObj = new Date(specialDate.date);
+      if (dateObj.getMonth() + 1 === todayMonth && dateObj.getDate() === todayDay) {
+        setTodaySpecialDate(specialDate);
+        return;
+      }
+    }
+    setTodaySpecialDate(null);
+  };
+
+  const checkNewAchievements = async () => {
+    try {
+      const res = await fetch('/api/achievements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id })
+      });
+      const data = await res.json();
+      if (data.newAchievements && data.newAchievements.length > 0) {
+        const achievement = data.newAchievements[0];
+        setNewAchievement(achievement);
+        triggerConfetti();
+        setTimeout(() => setNewAchievement(null), 4000);
+        fetchAchievements();
+      }
+    } catch (error) {
+      console.error('Error checking achievements:', error);
     }
   };
 
@@ -104,20 +310,66 @@ export default function Home() {
 
   const handleTaskToggle = async (task) => {
     setTogglingTaskId(task.id);
+    const wasCompleted = task.is_completed;
+
     try {
       await fetch(`/api/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ toggle_complete: true })
       });
-      fetchTasks();
-      fetchAssignedByOther();
-      showToast(task.is_completed ? 'Tarea marcada como pendiente' : '¡Tarea completada! 🎉');
+
+      // Fetch updated tasks
+      await fetchTasks();
+      await fetchAssignedByOther();
+
+      // Only celebrate when marking as complete (not when unmarking)
+      if (!wasCompleted) {
+        triggerFloatingHearts();
+        showToast(getRandomMessage());
+        // Check for new achievements after completing a task
+        setTimeout(() => checkNewAchievements(), 500);
+        // Refresh streak
+        fetchStreak();
+      } else {
+        showToast('Tarea marcada como pendiente');
+      }
     } catch (error) {
       console.error('Error toggling task:', error);
       showToast('Error al actualizar la tarea', 'error');
     } finally {
       setTogglingTaskId(null);
+    }
+  };
+
+  const handleReaction = async (taskId, emoji) => {
+    try {
+      await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reaction: emoji })
+      });
+      fetchTasks();
+      fetchAssignedByOther();
+      showToast('Reaccion enviada 💕');
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+      showToast('Error al enviar reaccion', 'error');
+    }
+  };
+
+  const saveSpecialDate = async (type, date, userId = null, label = null) => {
+    try {
+      await fetch('/api/special-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, date, user_id: userId, label })
+      });
+      fetchSpecialDates();
+      showToast('Fecha guardada 💕');
+    } catch (error) {
+      console.error('Error saving special date:', error);
+      showToast('Error al guardar fecha', 'error');
     }
   };
 
@@ -158,7 +410,7 @@ export default function Home() {
 
       setShowModal(false);
       setEditingTask(null);
-      setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium' });
+      setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, recurrence: null });
       fetchTasks();
       fetchAssignedByOther();
       showToast(editingTask ? 'Tarea actualizada' : 'Tarea creada 💕');
@@ -177,7 +429,9 @@ export default function Home() {
       description: '',
       assigned_to: currentUser?.id,
       due_date: '',
-      priority: 'medium'
+      priority: 'medium',
+      category_id: null,
+      recurrence: null
     });
     setShowModal(true);
   };
@@ -189,15 +443,31 @@ export default function Home() {
       description: task.description || '',
       assigned_to: task.assigned_to,
       due_date: task.due_date ? task.due_date.split('T')[0] : '',
-      priority: task.priority
+      priority: task.priority,
+      category_id: task.category_id || null,
+      recurrence: task.recurrence || null
     });
     setShowModal(true);
+  };
+
+  const openHistory = async () => {
+    await fetchHistory();
+    setShowHistoryModal(true);
   };
 
   // Calculate progress
   const completedTasks = tasks.filter(t => t.is_completed).length;
   const totalTasks = tasks.length;
   const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Celebrate 100% progress
+  useEffect(() => {
+    if (progressPercentage === 100 && prevProgressRef.current !== 100 && totalTasks > 0) {
+      triggerConfetti();
+      showCelebrationBanner('¡100% Completado!', '¡Felicidades, lo lograron! 🎉');
+    }
+    prevProgressRef.current = progressPercentage;
+  }, [progressPercentage, totalTasks, triggerConfetti, showCelebrationBanner]);
 
   const getOtherUser = () => users.find(u => u.id !== currentUser?.id);
   
@@ -214,25 +484,73 @@ export default function Home() {
 
   return (
     <div data-user={isArgenis ? 'argenis' : 'jenifer'}>
+      {/* Special Date Banner */}
+      {todaySpecialDate && (
+        <div className="special-date-banner" role="banner">
+          <span className="special-date-emoji">
+            {todaySpecialDate.type === 'anniversary' ? '💕' :
+             todaySpecialDate.type.includes('birthday') ? '🎂' : '🎉'}
+          </span>
+          <span className="special-date-text">
+            {todaySpecialDate.type === 'anniversary'
+              ? `¡Feliz Aniversario! ${todaySpecialDate.label || ''}`
+              : todaySpecialDate.type.includes('birthday')
+                ? `¡Feliz Cumpleaños ${todaySpecialDate.user_name || ''}! 🎉`
+                : todaySpecialDate.label || '¡Día especial!'}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <header className="header">
         <div className="header-content">
           <div className="logo-container">
             <img src="/icon-192.png" alt="Logo" className="logo" />
             <span className="app-title">Amor Compartido</span>
+            {streak.current_streak > 0 && (
+              <span className="streak-badge" title={`Mejor racha: ${streak.best_streak} días`}>
+                🔥 {streak.current_streak}
+              </span>
+            )}
           </div>
-          <div className="user-toggle">
-            {users.map(user => (
-              <button
-                key={user.id}
-                className={`user-btn ${currentUser?.id === user.id ? 'active' : ''}`}
-                onClick={() => handleUserSwitch(user)}
-              >
-                <span>{user.avatar_emoji}</span>
-                <span>{user.name}</span>
-              </button>
-            ))}
+          <div className="header-actions">
+            <button
+              className="header-icon-btn"
+              onClick={() => setShowAchievementsModal(true)}
+              aria-label="Ver logros"
+              title="Logros"
+            >
+              🏆
+            </button>
+            <button
+              className="header-icon-btn"
+              onClick={openHistory}
+              aria-label="Ver historial"
+              title="Historial"
+            >
+              📜
+            </button>
+            <button
+              className="header-icon-btn"
+              onClick={() => setShowSettingsModal(true)}
+              aria-label="Configuracion"
+              title="Configuracion"
+            >
+              ⚙️
+            </button>
           </div>
+        </div>
+        <div className="user-toggle">
+          {users.map(user => (
+            <button
+              key={user.id}
+              className={`user-btn ${currentUser?.id === user.id ? 'active' : ''}`}
+              onClick={() => handleUserSwitch(user)}
+            >
+              <span>{user.avatar_emoji}</span>
+              <span>{user.name}</span>
+            </button>
+          ))}
         </div>
       </header>
 
@@ -289,9 +607,12 @@ export default function Home() {
                       onToggle={handleTaskToggle}
                       onEdit={openEditTask}
                       onDelete={handleTaskDelete}
+                      onReaction={handleReaction}
                       showAssignedBy={false}
+                      currentUserId={currentUser?.id}
                       assignedByName={task.assigned_by_name}
                       togglingTaskId={togglingTaskId}
+                      reactionEmojis={REACTION_EMOJIS}
                     />
                   ))}
                 </div>
@@ -316,6 +637,28 @@ export default function Home() {
           </button>
         </div>
 
+        {/* Category Filter */}
+        {categories.length > 0 && (
+          <div className="category-filter">
+            <button
+              className={`category-chip ${selectedCategory === null ? 'active' : ''}`}
+              onClick={() => setSelectedCategory(null)}
+            >
+              Todas
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                className={`category-chip ${selectedCategory === cat.id ? 'active' : ''}`}
+                onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
+                style={{ '--cat-color': cat.color }}
+              >
+                {cat.emoji} {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Task List */}
         <div className="task-list">
           {tasks.length === 0 ? (
@@ -337,10 +680,12 @@ export default function Home() {
                 onToggle={handleTaskToggle}
                 onEdit={openEditTask}
                 onDelete={handleTaskDelete}
+                onReaction={handleReaction}
                 showAssignedBy={activeTab === 'myTasks'}
                 currentUserId={currentUser?.id}
                 assignedByName={task.assigned_by_name}
                 togglingTaskId={togglingTaskId}
+                reactionEmojis={REACTION_EMOJIS}
               />
             ))
           )}
@@ -435,6 +780,51 @@ export default function Home() {
                 </div>
               </div>
 
+              <div className="form-group">
+                <label className="form-label">Categoria (opcional)</label>
+                <div className="category-selector">
+                  <button
+                    type="button"
+                    className={`category-option ${formData.category_id === null ? 'selected' : ''}`}
+                    onClick={() => setFormData({...formData, category_id: null})}
+                  >
+                    Sin categoria
+                  </button>
+                  {categories.map(cat => (
+                    <button
+                      type="button"
+                      key={cat.id}
+                      className={`category-option ${formData.category_id === cat.id ? 'selected' : ''}`}
+                      onClick={() => setFormData({...formData, category_id: cat.id})}
+                      style={{ '--cat-color': cat.color }}
+                    >
+                      {cat.emoji} {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Repetir (opcional)</label>
+                <div className="recurrence-selector">
+                  {[
+                    { value: null, label: 'No repetir' },
+                    { value: 'daily', label: '📅 Diaria' },
+                    { value: 'weekly', label: '📆 Semanal' },
+                    { value: 'monthly', label: '🗓️ Mensual' }
+                  ].map(opt => (
+                    <button
+                      type="button"
+                      key={opt.value || 'none'}
+                      className={`recurrence-option ${formData.recurrence === opt.value ? 'selected' : ''}`}
+                      onClick={() => setFormData({...formData, recurrence: opt.value})}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button type="submit" className="submit-btn" disabled={isSaving}>
                 {isSaving ? 'Guardando...' : (editingTask ? 'Guardar cambios' : 'Crear tarea')} {!isSaving && '💕'}
               </button>
@@ -475,12 +865,231 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Floating Hearts Animation */}
+      {floatingHearts.length > 0 && (
+        <div className="hearts-container" aria-hidden="true">
+          {floatingHearts.map(heart => (
+            <span
+              key={heart.id}
+              className="floating-heart"
+              style={{
+                left: `${heart.left}%`,
+                bottom: '20%',
+                animationDelay: `${heart.delay}s`,
+              }}
+            >
+              {heart.emoji}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Confetti Animation */}
+      {confetti.length > 0 && (
+        <div className="confetti-container" aria-hidden="true">
+          {confetti.map(piece => (
+            <div
+              key={piece.id}
+              className={`confetti ${piece.shape}`}
+              style={{
+                left: `${piece.left}%`,
+                top: '-20px',
+                width: piece.shape !== 'heart' ? `${piece.size}px` : 'auto',
+                height: piece.shape !== 'heart' ? `${piece.size}px` : 'auto',
+                animationDelay: `${piece.delay}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Celebration Banner */}
+      {celebrationBanner && (
+        <div className="celebration-banner" role="alert" aria-live="polite">
+          <div className="celebration-banner-text">{celebrationBanner.text}</div>
+          <div className="celebration-banner-subtext">{celebrationBanner.subtext}</div>
+        </div>
+      )}
+
+      {/* New Achievement Modal */}
+      {newAchievement && (
+        <div className="achievement-unlock-overlay">
+          <div className="achievement-unlock-modal">
+            <div className="achievement-unlock-emoji">{newAchievement.emoji}</div>
+            <div className="achievement-unlock-title">¡Logro desbloqueado!</div>
+            <div className="achievement-unlock-name">{newAchievement.name}</div>
+            <div className="achievement-unlock-desc">{newAchievement.description}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Achievements Modal */}
+      {showAchievementsModal && (
+        <div className="modal-overlay" onClick={() => setShowAchievementsModal(false)}>
+          <div className="modal achievements-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">🏆 Logros</h2>
+              <button className="modal-close" onClick={() => setShowAchievementsModal(false)}>×</button>
+            </div>
+            <div className="achievements-list">
+              {achievements.map(achievement => (
+                <div
+                  key={achievement.id}
+                  className={`achievement-item ${achievement.unlocked ? 'unlocked' : 'locked'}`}
+                >
+                  <span className="achievement-emoji">{achievement.emoji}</span>
+                  <div className="achievement-info">
+                    <div className="achievement-name">{achievement.name}</div>
+                    <div className="achievement-desc">{achievement.description}</div>
+                    {achievement.unlocked && (
+                      <div className="achievement-date">
+                        Desbloqueado el {new Date(achievement.unlocked_at).toLocaleDateString('es-ES')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="achievements-stats">
+              <div className="achievements-stat">
+                <span className="achievements-stat-value">
+                  {achievements.filter(a => a.unlocked).length}/{achievements.length}
+                </span>
+                <span className="achievements-stat-label">Logros</span>
+              </div>
+              <div className="achievements-stat">
+                <span className="achievements-stat-value">🔥 {streak.best_streak}</span>
+                <span className="achievements-stat-label">Mejor racha</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistoryModal && (
+        <div className="modal-overlay" onClick={() => setShowHistoryModal(false)}>
+          <div className="modal history-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">📜 Historial</h2>
+              <button className="modal-close" onClick={() => setShowHistoryModal(false)}>×</button>
+            </div>
+            <div className="history-stats">
+              <div className="history-stat">
+                <span className="history-stat-value">{history.stats.thisWeek}</span>
+                <span className="history-stat-label">Esta semana</span>
+              </div>
+              <div className="history-stat">
+                <span className="history-stat-value">{history.stats.total}</span>
+                <span className="history-stat-label">Total completadas</span>
+              </div>
+            </div>
+            <div className="history-list">
+              {history.tasks.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">📝</div>
+                  <div className="empty-state-text">No hay tareas completadas aún</div>
+                </div>
+              ) : (
+                history.tasks.map(task => (
+                  <div key={task.id} className="history-item">
+                    <div className="history-item-header">
+                      <span className="history-item-title">{task.title}</span>
+                      {task.category_emoji && (
+                        <span className="history-item-category">{task.category_emoji}</span>
+                      )}
+                    </div>
+                    <div className="history-item-meta">
+                      <span>✅ {new Date(task.completed_at).toLocaleDateString('es-ES', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}</span>
+                      {task.reaction && <span className="history-item-reaction">{task.reaction}</span>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
+          <div className="modal settings-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">⚙️ Configuracion</h2>
+              <button className="modal-close" onClick={() => setShowSettingsModal(false)}>×</button>
+            </div>
+            <div className="settings-section">
+              <h3 className="settings-section-title">💕 Fechas Especiales</h3>
+              <p className="settings-section-desc">
+                Configura fechas importantes para recibir celebraciones especiales
+              </p>
+
+              <div className="special-date-form">
+                <label className="form-label">Aniversario de pareja</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={specialDates.find(d => d.type === 'anniversary')?.date?.split('T')[0] || ''}
+                  onChange={e => saveSpecialDate('anniversary', e.target.value, null, 'Aniversario')}
+                />
+              </div>
+
+              <div className="special-date-form">
+                <label className="form-label">Cumpleaños de {users[0]?.name || 'Usuario 1'}</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={specialDates.find(d => d.type === 'birthday' && d.user_id === users[0]?.id)?.date?.split('T')[0] || ''}
+                  onChange={e => saveSpecialDate('birthday', e.target.value, users[0]?.id)}
+                />
+              </div>
+
+              <div className="special-date-form">
+                <label className="form-label">Cumpleaños de {users[1]?.name || 'Usuario 2'}</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={specialDates.find(d => d.type === 'birthday' && d.user_id === users[1]?.id)?.date?.split('T')[0] || ''}
+                  onChange={e => saveSpecialDate('birthday', e.target.value, users[1]?.id)}
+                />
+              </div>
+            </div>
+
+            <div className="settings-section">
+              <h3 className="settings-section-title">📊 Estadísticas</h3>
+              <div className="settings-stats">
+                <div className="settings-stat">
+                  <span>🔥 Racha actual:</span>
+                  <strong>{streak.current_streak} días</strong>
+                </div>
+                <div className="settings-stat">
+                  <span>⭐ Mejor racha:</span>
+                  <strong>{streak.best_streak} días</strong>
+                </div>
+                <div className="settings-stat">
+                  <span>🏆 Logros:</span>
+                  <strong>{achievements.filter(a => a.unlocked).length}/{achievements.length}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // TaskCard Component
-function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUserId, assignedByName, togglingTaskId }) {
+function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy, currentUserId, assignedByName, togglingTaskId, reactionEmojis }) {
+  const [showReactions, setShowReactions] = useState(false);
+
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
     const date = new Date(dateStr);
@@ -493,6 +1102,9 @@ function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUse
   const fromClass = isFromJenifer ? 'from-jenifer' : isFromArgenis ? 'from-argenis' : '';
 
   const isToggling = togglingTaskId === task.id;
+
+  // Can react if: task is completed AND was assigned by current user to the other person
+  const canReact = task.is_completed && task.assigned_by === currentUserId && task.assigned_to !== currentUserId;
 
   return (
     <div className={`task-card ${task.is_completed ? 'completed' : ''} priority-${task.priority} ${fromClass}`}>
@@ -507,7 +1119,22 @@ function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUse
           disabled={isToggling}
         />
         <div className="task-content">
-          <div className="task-title">{task.title}</div>
+          <div className="task-title-row">
+            <span className="task-title">{task.title}</span>
+            {task.category_emoji && (
+              <span className="task-category-badge" title={task.category_name}>
+                {task.category_emoji}
+              </span>
+            )}
+            {task.recurrence && (
+              <span className="task-recurrence-badge" title={`Repetir: ${task.recurrence}`}>
+                🔄
+              </span>
+            )}
+            {task.reaction && (
+              <span className="task-reaction-badge">{task.reaction}</span>
+            )}
+          </div>
           {task.description && <div className="task-description">{task.description}</div>}
           <div className="task-meta">
             {showAssignedBy && task.assigned_by !== currentUserId && (
@@ -525,6 +1152,41 @@ function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUse
               {task.priority === 'high' ? 'Alta' : task.priority === 'low' ? 'Baja' : 'Media'}
             </span>
           </div>
+
+          {/* Reaction buttons for completed tasks assigned by current user */}
+          {canReact && !task.reaction && (
+            <div className="task-reaction-section">
+              {showReactions ? (
+                <div className="reaction-picker">
+                  {reactionEmojis.map(emoji => (
+                    <button
+                      key={emoji}
+                      className="reaction-btn"
+                      onClick={() => {
+                        onReaction(task.id, emoji);
+                        setShowReactions(false);
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                  <button
+                    className="reaction-btn reaction-close"
+                    onClick={() => setShowReactions(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="add-reaction-btn"
+                  onClick={() => setShowReactions(true)}
+                >
+                  💕 Reaccionar
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="task-actions">
           <button

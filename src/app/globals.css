@@ -1135,6 +1135,729 @@ body {
 }
 
 /* ============================================
+   FLOATING HEARTS ANIMATION
+   ============================================ */
+.hearts-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.floating-heart {
+  position: absolute;
+  font-size: 1.5rem;
+  animation: floatHeart 1.5s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes floatHeart {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(0.5) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-100px) scale(1.2) rotate(15deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-200px) scale(0.8) rotate(-15deg);
+  }
+}
+
+/* ============================================
+   CONFETTI ANIMATION
+   ============================================ */
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1001;
+  overflow: hidden;
+}
+
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  animation: confettiFall 3s ease-out forwards;
+}
+
+.confetti.circle {
+  border-radius: 50%;
+}
+
+.confetti.square {
+  border-radius: 2px;
+}
+
+.confetti.heart::before {
+  content: '💕';
+  font-size: 14px;
+}
+
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translateY(-20px) rotate(0deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100vh) rotate(720deg) scale(0.5);
+  }
+}
+
+/* Jenifer theme confetti colors */
+[data-user="jenifer"] .confetti {
+  background: var(--primary);
+}
+
+[data-user="jenifer"] .confetti:nth-child(2n) {
+  background: var(--primary-dark);
+}
+
+[data-user="jenifer"] .confetti:nth-child(3n) {
+  background: var(--accent);
+}
+
+[data-user="jenifer"] .confetti:nth-child(4n) {
+  background: #FFB6C1;
+}
+
+/* Argenis theme confetti colors */
+[data-user="argenis"] .confetti {
+  background: var(--burgundy);
+}
+
+[data-user="argenis"] .confetti:nth-child(2n) {
+  background: var(--burgundy-dark);
+}
+
+[data-user="argenis"] .confetti:nth-child(3n) {
+  background: #8B0000;
+}
+
+[data-user="argenis"] .confetti:nth-child(4n) {
+  background: #C41E3A;
+}
+
+/* ============================================
+   CELEBRATION BANNER
+   ============================================ */
+.celebration-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: white;
+  padding: 24px 40px;
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  z-index: 1002;
+  text-align: center;
+  animation: celebrationPop 0.5s ease forwards;
+}
+
+.celebration-banner-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.celebration-banner-subtext {
+  font-size: 1rem;
+  color: var(--text-light);
+}
+
+@keyframes celebrationPop {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+[data-user="jenifer"] .celebration-banner {
+  border: 3px solid var(--primary);
+}
+
+[data-user="argenis"] .celebration-banner {
+  border: 3px solid var(--burgundy);
+}
+
+/* Dark mode celebration banner */
+@media (prefers-color-scheme: dark) {
+  .celebration-banner {
+    background: var(--surface);
+  }
+}
+
+/* ============================================
+   SPECIAL DATE BANNER
+   ============================================ */
+.special-date-banner {
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  padding: 12px 20px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.special-date-emoji {
+  font-size: 1.5rem;
+  animation: bounce 1s ease infinite;
+}
+
+.special-date-text {
+  font-weight: 600;
+  color: #333;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* ============================================
+   STREAK BADGE
+   ============================================ */
+.streak-badge {
+  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-left: 8px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   HEADER ACTIONS
+   ============================================ */
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.header-icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+}
+
+.header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+/* Update header layout */
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 500px;
+  margin: 0 auto;
+  margin-bottom: 12px;
+}
+
+.header .user-toggle {
+  justify-content: center;
+}
+
+/* ============================================
+   CATEGORY FILTER
+   ============================================ */
+.category-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.category-chip {
+  padding: 8px 14px;
+  border: none;
+  background: var(--surface);
+  color: var(--text-light);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.category-chip:hover {
+  background: var(--primary-light);
+}
+
+.category-chip.active {
+  background: var(--primary);
+  color: white;
+}
+
+[data-user="argenis"] .category-chip.active {
+  background: var(--burgundy);
+}
+
+/* ============================================
+   CATEGORY SELECTOR (in form)
+   ============================================ */
+.category-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.category-option {
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.category-option:hover {
+  border-color: var(--primary);
+}
+
+.category-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+[data-user="argenis"] .category-option.selected {
+  border-color: var(--burgundy);
+  background: var(--burgundy-light);
+}
+
+/* ============================================
+   RECURRENCE SELECTOR
+   ============================================ */
+.recurrence-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recurrence-option {
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.recurrence-option:hover {
+  border-color: var(--primary);
+}
+
+.recurrence-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+[data-user="argenis"] .recurrence-option.selected {
+  border-color: var(--burgundy);
+  background: var(--burgundy-light);
+}
+
+/* ============================================
+   TASK CARD ENHANCEMENTS
+   ============================================ */
+.task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-category-badge,
+.task-recurrence-badge,
+.task-reaction-badge {
+  font-size: 0.9rem;
+}
+
+.task-reaction-badge {
+  animation: pop 0.3s ease;
+}
+
+@keyframes pop {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.task-reaction-section {
+  margin-top: 8px;
+}
+
+.add-reaction-btn {
+  padding: 6px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 20px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  transition: all 0.3s ease;
+}
+
+.add-reaction-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.reaction-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reaction-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: var(--surface);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.2s ease;
+}
+
+.reaction-btn:hover {
+  transform: scale(1.2);
+  background: var(--primary-light);
+}
+
+.reaction-close {
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+/* ============================================
+   ACHIEVEMENT UNLOCK MODAL
+   ============================================ */
+.achievement-unlock-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  animation: fadeIn 0.3s ease;
+}
+
+.achievement-unlock-modal {
+  background: white;
+  padding: 40px;
+  border-radius: 24px;
+  text-align: center;
+  animation: achievementPop 0.5s ease;
+  max-width: 300px;
+}
+
+.achievement-unlock-emoji {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  animation: bounce 1s ease infinite;
+}
+
+.achievement-unlock-title {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.achievement-unlock-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.achievement-unlock-desc {
+  font-size: 0.95rem;
+  color: var(--text-light);
+}
+
+@keyframes achievementPop {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  50% { transform: scale(1.1) rotate(5deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+/* ============================================
+   ACHIEVEMENTS MODAL
+   ============================================ */
+.achievements-modal {
+  max-height: 80vh;
+}
+
+.achievements-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.achievement-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+.achievement-item.unlocked {
+  background: var(--primary-light);
+}
+
+.achievement-item.locked {
+  background: var(--surface);
+  opacity: 0.6;
+}
+
+[data-user="argenis"] .achievement-item.unlocked {
+  background: var(--burgundy-light);
+}
+
+.achievement-emoji {
+  font-size: 2rem;
+}
+
+.achievement-item.locked .achievement-emoji {
+  filter: grayscale(1);
+}
+
+.achievement-info {
+  flex: 1;
+}
+
+.achievement-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.achievement-desc {
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+.achievement-date {
+  font-size: 0.75rem;
+  color: var(--primary-dark);
+  margin-top: 4px;
+}
+
+[data-user="argenis"] .achievement-date {
+  color: var(--burgundy);
+}
+
+.achievements-stats {
+  display: flex;
+  justify-content: space-around;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.achievements-stat {
+  text-align: center;
+}
+
+.achievements-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: block;
+}
+
+.achievements-stat-label {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+/* ============================================
+   HISTORY MODAL
+   ============================================ */
+.history-modal {
+  max-height: 80vh;
+}
+
+.history-stats {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--primary-light);
+  border-radius: 12px;
+}
+
+[data-user="argenis"] .history-stats {
+  background: var(--burgundy-light);
+}
+
+.history-stat {
+  text-align: center;
+  flex: 1;
+}
+
+.history-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  display: block;
+  color: var(--primary-dark);
+}
+
+[data-user="argenis"] .history-stat-value {
+  color: var(--burgundy);
+}
+
+.history-stat-label {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.history-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.history-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.history-item-title {
+  font-weight: 500;
+}
+
+.history-item-category {
+  font-size: 0.9rem;
+}
+
+.history-item-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.history-item-reaction {
+  font-size: 1rem;
+}
+
+/* ============================================
+   SETTINGS MODAL
+   ============================================ */
+.settings-modal {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.settings-section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.settings-section-desc {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  margin-bottom: 16px;
+}
+
+.special-date-form {
+  margin-bottom: 16px;
+}
+
+.settings-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+/* ============================================
    DARK MODE
    ============================================ */
 @media (prefers-color-scheme: dark) {
@@ -1247,5 +1970,48 @@ body {
 
   .confirm-btn-cancel:hover {
     background: var(--border);
+  }
+
+  /* Dark mode for new components */
+  .category-chip {
+    background: var(--surface);
+  }
+
+  .category-option,
+  .recurrence-option {
+    background: var(--background);
+    border-color: var(--border);
+  }
+
+  .achievement-unlock-modal {
+    background: var(--surface);
+  }
+
+  .achievement-item.unlocked {
+    background: rgba(244, 143, 177, 0.15);
+  }
+
+  [data-user="argenis"] .achievement-item.unlocked {
+    background: rgba(114, 47, 55, 0.2);
+  }
+
+  .achievement-item.locked {
+    background: var(--background);
+  }
+
+  .history-stats {
+    background: rgba(244, 143, 177, 0.15);
+  }
+
+  [data-user="argenis"] .history-stats {
+    background: rgba(114, 47, 55, 0.2);
+  }
+
+  .reaction-btn {
+    background: var(--background);
+  }
+
+  .special-date-banner {
+    background: linear-gradient(135deg, #B8860B 0%, #DAA520 100%);
   }
 }

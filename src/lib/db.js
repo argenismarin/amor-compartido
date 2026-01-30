@@ -49,8 +49,135 @@ export async function initDatabase() {
       completed_at TIMESTAMP NULL,
       due_date DATE NULL,
       priority VARCHAR(10) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+      reaction VARCHAR(10) NULL,
+      category_id INT NULL,
+      recurrence VARCHAR(20) NULL CHECK (recurrence IN ('daily', 'weekly', 'monthly', 'custom')),
+      recurrence_days TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Add reaction column if not exists (for existing databases)
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'reaction') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN reaction VARCHAR(10) NULL;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'category_id') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN category_id INT NULL;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'recurrence') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN recurrence VARCHAR(20) NULL;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'recurrence_days') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN recurrence_days TEXT NULL;
+      END IF;
+    END $$;
+  `);
+
+  // Create streaks table for gamification
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_streaks (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL REFERENCES AppChecklist_users(id) UNIQUE,
+      current_streak INT DEFAULT 0,
+      best_streak INT DEFAULT 0,
+      last_activity DATE NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Initialize streaks for users if not exist
+  const existingStreaks = await query('SELECT user_id FROM AppChecklist_streaks');
+  const streakUserIds = existingStreaks.map(s => s.user_id);
+  for (const user of users.length > 0 ? users : await query('SELECT id FROM AppChecklist_users')) {
+    if (!streakUserIds.includes(user.id)) {
+      await query('INSERT INTO AppChecklist_streaks (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [user.id]);
+    }
+  }
+
+  // Create achievements table
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_achievements (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description TEXT NOT NULL,
+      emoji VARCHAR(10) NOT NULL,
+      condition_type VARCHAR(50) NOT NULL,
+      condition_value INT DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Create user achievements table
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_user_achievements (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL REFERENCES AppChecklist_users(id),
+      achievement_id INT NOT NULL REFERENCES AppChecklist_achievements(id),
+      unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, achievement_id)
+    )
+  `);
+
+  // Insert default achievements if not exist
+  const existingAchievements = await query('SELECT id FROM AppChecklist_achievements');
+  if (existingAchievements.length === 0) {
+    await query(`
+      INSERT INTO AppChecklist_achievements (name, description, emoji, condition_type, condition_value) VALUES
+      ('Primera tarea', 'Completaste tu primera tarea', '🌟', 'tasks_completed', 1),
+      ('Productivo', 'Completaste 10 tareas', '🏆', 'tasks_completed', 10),
+      ('Imparable', 'Completaste 50 tareas', '💪', 'tasks_completed', 50),
+      ('Centenario', 'Completaste 100 tareas', '💯', 'tasks_completed', 100),
+      ('En racha', '7 días seguidos completando tareas', '🔥', 'streak_days', 7),
+      ('Racha legendaria', '30 días seguidos', '⚡', 'streak_days', 30),
+      ('Pareja en equipo', 'Ambos completaron tareas el mismo día', '💑', 'team_day', 1),
+      ('Madrugador', 'Completaste una tarea antes de las 8am', '🌅', 'early_bird', 1),
+      ('Noctámbulo', 'Completaste una tarea después de las 10pm', '🌙', 'night_owl', 1)
+    `);
+  }
+
+  // Create categories table
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_categories (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(50) NOT NULL,
+      emoji VARCHAR(10) NOT NULL,
+      color VARCHAR(20) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Insert default categories if not exist
+  const existingCategories = await query('SELECT id FROM AppChecklist_categories');
+  if (existingCategories.length === 0) {
+    await query(`
+      INSERT INTO AppChecklist_categories (name, emoji, color) VALUES
+      ('Casa', '🏠', '#4CAF50'),
+      ('Compras', '🛒', '#2196F3'),
+      ('Salud', '💪', '#E91E63'),
+      ('Juntos', '💑', '#9C27B0'),
+      ('Trabajo', '💼', '#FF9800'),
+      ('Otros', '📌', '#607D8B')
+    `);
+  }
+
+  // Create special dates table
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_special_dates (
+      id SERIAL PRIMARY KEY,
+      type VARCHAR(50) NOT NULL,
+      date DATE NOT NULL,
+      user_id INT NULL REFERENCES AppChecklist_users(id),
+      label VARCHAR(100) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(type, user_id)
     )
   `);
 }
