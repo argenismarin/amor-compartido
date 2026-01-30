@@ -16,7 +16,7 @@ export async function PUT(request) {
   try {
     const { id, name, avatar_emoji } = await request.json();
     await query(
-      'UPDATE AppChecklist_users SET name = ?, avatar_emoji = ? WHERE id = ?',
+      'UPDATE AppChecklist_users SET name = $1, avatar_emoji = $2 WHERE id = $3',
       [name, avatar_emoji, id]
     );
     return NextResponse.json({ success: true });
