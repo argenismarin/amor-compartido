@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export default function Home() {
   const [users, setUsers] = useState([]);
@@ -12,7 +12,17 @@ export default function Home() {
   const [editingTask, setEditingTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [collapsibleOpen, setCollapsibleOpen] = useState(false);
-  
+
+  // Toast state
+  const [toast, setToast] = useState(null);
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  // Loading states
+  const [isSaving, setIsSaving] = useState(false);
+  const [togglingTaskId, setTogglingTaskId] = useState(null);
+
   // Form state
   const [formData, setFormData] = useState({
     title: '',
@@ -21,6 +31,12 @@ export default function Home() {
     due_date: '',
     priority: 'medium'
   });
+
+  // Toast helper function
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   // Fetch users on mount
   useEffect(() => {
@@ -40,7 +56,7 @@ export default function Home() {
       const res = await fetch('/api/users');
       const data = await res.json();
       setUsers(data);
-      
+
       // Restore user from localStorage or default to first
       const savedUserId = localStorage.getItem('currentUserId');
       const savedUser = data.find(u => u.id === parseInt(savedUserId));
@@ -48,6 +64,7 @@ export default function Home() {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching users:', error);
+      showToast('Error al cargar usuarios', 'error');
       setLoading(false);
     }
   };
@@ -65,6 +82,7 @@ export default function Home() {
       setTasks(data);
     } catch (error) {
       console.error('Error fetching tasks:', error);
+      showToast('Error al cargar tareas', 'error');
     }
   };
 
@@ -75,6 +93,7 @@ export default function Home() {
       setAssignedByOther(data);
     } catch (error) {
       console.error('Error fetching assigned by other:', error);
+      showToast('Error al cargar tareas asignadas', 'error');
     }
   };
 
@@ -84,6 +103,7 @@ export default function Home() {
   };
 
   const handleTaskToggle = async (task) => {
+    setTogglingTaskId(task.id);
     try {
       await fetch(`/api/tasks/${task.id}`, {
         method: 'PUT',
@@ -92,28 +112,41 @@ export default function Home() {
       });
       fetchTasks();
       fetchAssignedByOther();
+      showToast(task.is_completed ? 'Tarea marcada como pendiente' : '¡Tarea completada! 🎉');
     } catch (error) {
       console.error('Error toggling task:', error);
+      showToast('Error al actualizar la tarea', 'error');
+    } finally {
+      setTogglingTaskId(null);
     }
   };
 
   const handleTaskDelete = async (taskId) => {
-    if (!confirm('¿Eliminar esta tarea?')) return;
-    try {
-      await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-      fetchTasks();
-      fetchAssignedByOther();
-    } catch (error) {
-      console.error('Error deleting task:', error);
-    }
+    setConfirmDialog({
+      message: '¿Eliminar esta tarea?',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+          fetchTasks();
+          fetchAssignedByOther();
+          showToast('Tarea eliminada');
+        } catch (error) {
+          console.error('Error deleting task:', error);
+          showToast('Error al eliminar la tarea', 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
     try {
       const method = editingTask ? 'PUT' : 'POST';
       const url = editingTask ? `/api/tasks/${editingTask.id}` : '/api/tasks';
-      
+
       await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -122,14 +155,18 @@ export default function Home() {
           assigned_by: currentUser.id
         })
       });
-      
+
       setShowModal(false);
       setEditingTask(null);
       setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium' });
       fetchTasks();
       fetchAssignedByOther();
+      showToast(editingTask ? 'Tarea actualizada' : 'Tarea creada 💕');
     } catch (error) {
       console.error('Error saving task:', error);
+      showToast('Error al guardar la tarea', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -228,7 +265,12 @@ export default function Home() {
         {/* Assigned by Other - Collapsible */}
         {assignedByOther.length > 0 && (
           <section className={`collapsible ${collapsibleOpen ? 'open' : ''}`}>
-            <div className="collapsible-header" onClick={() => setCollapsibleOpen(!collapsibleOpen)}>
+            <button
+              className="collapsible-header"
+              onClick={() => setCollapsibleOpen(!collapsibleOpen)}
+              aria-expanded={collapsibleOpen}
+              aria-controls="collapsible-content"
+            >
               <div className="collapsible-title">
                 <span>💌 Asignadas por {getOtherUser()?.name}</span>
                 <span className="collapsible-badge">
@@ -236,9 +278,9 @@ export default function Home() {
                 </span>
               </div>
               <span className="collapsible-arrow">▼</span>
-            </div>
+            </button>
             {collapsibleOpen && (
-              <div className="collapsible-content">
+              <div className="collapsible-content" id="collapsible-content">
                 <div className="task-list">
                   {assignedByOther.map(task => (
                     <TaskCard
@@ -249,6 +291,7 @@ export default function Home() {
                       onDelete={handleTaskDelete}
                       showAssignedBy={false}
                       assignedByName={task.assigned_by_name}
+                      togglingTaskId={togglingTaskId}
                     />
                   ))}
                 </div>
@@ -280,7 +323,7 @@ export default function Home() {
               <div className="empty-state-icon">💕</div>
               <div className="empty-state-title">No hay tareas aún</div>
               <div className="empty-state-text">
-                {activeTab === 'myTasks' 
+                {activeTab === 'myTasks'
                   ? 'Crea una nueva tarea para ti'
                   : `Asigna una tarea a ${getOtherUser()?.name}`
                 }
@@ -297,6 +340,7 @@ export default function Home() {
                 showAssignedBy={activeTab === 'myTasks'}
                 currentUserId={currentUser?.id}
                 assignedByName={task.assigned_by_name}
+                togglingTaskId={togglingTaskId}
               />
             ))
           )}
@@ -343,16 +387,20 @@ export default function Home() {
 
               <div className="form-group">
                 <label className="form-label">Asignar a</label>
-                <div className="assign-selector">
+                <div className="assign-selector" role="radiogroup" aria-label="Asignar tarea a">
                   {users.map(user => (
-                    <div
+                    <button
+                      type="button"
                       key={user.id}
                       className={`assign-option ${formData.assigned_to === user.id ? 'selected' : ''}`}
                       onClick={() => setFormData({...formData, assigned_to: user.id})}
+                      role="radio"
+                      aria-checked={formData.assigned_to === user.id}
+                      aria-label={`Asignar a ${user.name}`}
                     >
                       <span className="assign-emoji">{user.avatar_emoji}</span>
                       <span className="assign-name">{user.name}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -364,28 +412,66 @@ export default function Home() {
                   className="form-input"
                   value={formData.due_date}
                   onChange={e => setFormData({...formData, due_date: e.target.value})}
+                  min={new Date().toISOString().split('T')[0]}
                 />
               </div>
 
               <div className="form-group">
                 <label className="form-label">Prioridad</label>
-                <div className="priority-selector">
+                <div className="priority-selector" role="radiogroup" aria-label="Seleccionar prioridad">
                   {['low', 'medium', 'high'].map(p => (
-                    <div
+                    <button
+                      type="button"
                       key={p}
                       className={`priority-option ${p} ${formData.priority === p ? 'selected' : ''}`}
                       onClick={() => setFormData({...formData, priority: p})}
+                      role="radio"
+                      aria-checked={formData.priority === p}
+                      aria-label={`Prioridad ${p === 'low' ? 'baja' : p === 'medium' ? 'media' : 'alta'}`}
                     >
                       {p === 'low' ? '🔵 Baja' : p === 'medium' ? '🟡 Media' : '🔴 Alta'}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
 
-              <button type="submit" className="submit-btn">
-                {editingTask ? 'Guardar cambios' : 'Crear tarea'} 💕
+              <button type="submit" className="submit-btn" disabled={isSaving}>
+                {isSaving ? 'Guardando...' : (editingTask ? 'Guardar cambios' : 'Crear tarea')} {!isSaving && '💕'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`} role="alert" aria-live="polite">
+          <span className="toast-icon">
+            {toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'}
+          </span>
+          <span className="toast-message">{toast.message}</span>
+        </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div className="confirm-dialog">
+            <p id="confirm-title" className="confirm-message">{confirmDialog.message}</p>
+            <div className="confirm-actions">
+              <button
+                className="confirm-btn confirm-btn-cancel"
+                onClick={confirmDialog.onCancel}
+              >
+                Cancelar
+              </button>
+              <button
+                className="confirm-btn confirm-btn-delete"
+                onClick={confirmDialog.onConfirm}
+              >
+                Eliminar
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -394,7 +480,7 @@ export default function Home() {
 }
 
 // TaskCard Component
-function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUserId, assignedByName }) {
+function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUserId, assignedByName, togglingTaskId }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
     const date = new Date(dateStr);
@@ -406,12 +492,19 @@ function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUse
   const isFromArgenis = assignedByName?.toLowerCase().includes('argenis');
   const fromClass = isFromJenifer ? 'from-jenifer' : isFromArgenis ? 'from-argenis' : '';
 
+  const isToggling = togglingTaskId === task.id;
+
   return (
     <div className={`task-card ${task.is_completed ? 'completed' : ''} priority-${task.priority} ${fromClass}`}>
       <div className="task-header">
-        <div
-          className={`task-checkbox ${task.is_completed ? 'checked' : ''}`}
+        <button
+          type="button"
+          className={`task-checkbox ${task.is_completed ? 'checked' : ''} ${isToggling ? 'toggling' : ''}`}
           onClick={() => onToggle(task)}
+          role="checkbox"
+          aria-checked={task.is_completed}
+          aria-label={`Marcar "${task.title}" como ${task.is_completed ? 'pendiente' : 'completada'}`}
+          disabled={isToggling}
         />
         <div className="task-content">
           <div className="task-title">{task.title}</div>
@@ -434,10 +527,18 @@ function TaskCard({ task, onToggle, onEdit, onDelete, showAssignedBy, currentUse
           </div>
         </div>
         <div className="task-actions">
-          <button className="task-action-btn" onClick={() => onEdit(task)} title="Editar">
+          <button
+            className="task-action-btn"
+            onClick={() => onEdit(task)}
+            aria-label={`Editar tarea: ${task.title}`}
+          >
             ✏️
           </button>
-          <button className="task-action-btn delete" onClick={() => onDelete(task.id)} title="Eliminar">
+          <button
+            className="task-action-btn delete"
+            onClick={() => onDelete(task.id)}
+            aria-label={`Eliminar tarea: ${task.title}`}
+          >
             🗑️
           </button>
         </div>
