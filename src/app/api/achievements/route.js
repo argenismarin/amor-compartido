@@ -118,6 +118,90 @@ async function checkAndUnlockAchievements(userId) {
         );
         shouldUnlock = !!nightOwl;
         break;
+      case 'weekend_tasks':
+        // Check tasks completed on weekends (Saturday=6, Sunday=0)
+        const weekendTasks = await queryOne(
+          `SELECT COUNT(*) as count FROM AppChecklist_tasks
+           WHERE assigned_to = $1 AND is_completed = true
+           AND EXTRACT(DOW FROM completed_at) IN (0, 6)
+           AND completed_at >= CURRENT_DATE - INTERVAL '7 days'`,
+          [userId]
+        );
+        shouldUnlock = parseInt(weekendTasks?.count || 0) >= achievement.condition_value;
+        break;
+      case 'reactions_given':
+        // Count reactions given by this user (tasks they assigned that have reactions)
+        const reactionsGiven = await queryOne(
+          `SELECT COUNT(*) as count FROM AppChecklist_tasks
+           WHERE assigned_by = $1 AND reaction IS NOT NULL`,
+          [userId]
+        );
+        shouldUnlock = parseInt(reactionsGiven?.count || 0) >= achievement.condition_value;
+        break;
+      case 'categories_used':
+        // Check how many different categories the user has used
+        const categoriesUsed = await queryOne(
+          `SELECT COUNT(DISTINCT category_id) as count FROM AppChecklist_tasks
+           WHERE assigned_to = $1 AND category_id IS NOT NULL`,
+          [userId]
+        );
+        shouldUnlock = parseInt(categoriesUsed?.count || 0) >= achievement.condition_value;
+        break;
+      case 'monthly_tasks':
+        // Check tasks completed this month
+        const monthlyTasks = await queryOne(
+          `SELECT COUNT(*) as count FROM AppChecklist_tasks
+           WHERE assigned_to = $1 AND is_completed = true
+           AND EXTRACT(MONTH FROM completed_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+           AND EXTRACT(YEAR FROM completed_at) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+          [userId]
+        );
+        shouldUnlock = parseInt(monthlyTasks?.count || 0) >= achievement.condition_value;
+        break;
+      case 'mesiversario':
+        // Check if today is a mesiversario (monthly anniversary)
+        const anniversary = await queryOne(
+          `SELECT date FROM AppChecklist_special_dates WHERE type = 'anniversary'`
+        );
+        if (anniversary?.date) {
+          const annivDate = new Date(anniversary.date);
+          const today2 = new Date();
+          // If today's day matches anniversary day and at least 1 month has passed
+          if (annivDate.getDate() === today2.getDate()) {
+            const monthsDiff = (today2.getFullYear() - annivDate.getFullYear()) * 12 +
+                              (today2.getMonth() - annivDate.getMonth());
+            shouldUnlock = monthsDiff >= 1;
+          }
+        }
+        break;
+      case 'aniversario':
+        // Check if today is the anniversary (same month and day, at least 1 year)
+        const anniv = await queryOne(
+          `SELECT date FROM AppChecklist_special_dates WHERE type = 'anniversary'`
+        );
+        if (anniv?.date) {
+          const annivDate2 = new Date(anniv.date);
+          const today3 = new Date();
+          if (annivDate2.getDate() === today3.getDate() &&
+              annivDate2.getMonth() === today3.getMonth() &&
+              today3.getFullYear() > annivDate2.getFullYear()) {
+            shouldUnlock = true;
+          }
+        }
+        break;
+      case 'app_months':
+        // Check how many months the app has been used
+        const appUsage = await queryOne(
+          `SELECT first_use FROM AppChecklist_app_usage ORDER BY id LIMIT 1`
+        );
+        if (appUsage?.first_use) {
+          const firstUse = new Date(appUsage.first_use);
+          const today4 = new Date();
+          const monthsUsed = (today4.getFullYear() - firstUse.getFullYear()) * 12 +
+                            (today4.getMonth() - firstUse.getMonth());
+          shouldUnlock = monthsUsed >= achievement.condition_value;
+        }
+        break;
     }
 
     if (shouldUnlock) {

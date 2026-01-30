@@ -139,8 +139,44 @@ export async function initDatabase() {
       ('Racha legendaria', '30 días seguidos', '⚡', 'streak_days', 30),
       ('Pareja en equipo', 'Ambos completaron tareas el mismo día', '💑', 'team_day', 1),
       ('Madrugador', 'Completaste una tarea antes de las 8am', '🌅', 'early_bird', 1),
-      ('Noctámbulo', 'Completaste una tarea después de las 10pm', '🌙', 'night_owl', 1)
+      ('Noctámbulo', 'Completaste una tarea después de las 10pm', '🌙', 'night_owl', 1),
+      ('Quinientos', '¡Medio millar de amor compartido!', '🌟💫', 'tasks_completed', 500),
+      ('Super racha', '2 semanas seguidas sin fallar', '🔥🔥', 'streak_days', 14),
+      ('Fin de semana productivo', '5 tareas en un fin de semana', '🎯', 'weekend_tasks', 5),
+      ('Romántico', 'Diste 10 reacciones de amor', '💝', 'reactions_given', 10),
+      ('Súper romántico', 'Diste 50 reacciones de amor', '💖✨', 'reactions_given', 50),
+      ('Organizador', 'Usaste todas las categorías', '📋', 'categories_used', 5),
+      ('Constante', '30 tareas completadas en un mes', '📅', 'monthly_tasks', 30),
+      ('Mesiversario', 'Celebraron su primer mesiversario juntos', '💕', 'mesiversario', 1),
+      ('Aniversario', '¡Feliz aniversario de amor!', '💍', 'aniversario', 1),
+      ('Amor eterno', '12 meses usando la app juntos', '💞', 'app_months', 12)
     `);
+  } else if (existingAchievements.length < 19) {
+    // Add new achievements if they don't exist yet
+    const achievementNames = await query('SELECT name FROM AppChecklist_achievements');
+    const existingNames = new Set(achievementNames.map(a => a.name));
+
+    const newAchievements = [
+      ['Quinientos', '¡Medio millar de amor compartido!', '🌟💫', 'tasks_completed', 500],
+      ['Super racha', '2 semanas seguidas sin fallar', '🔥🔥', 'streak_days', 14],
+      ['Fin de semana productivo', '5 tareas en un fin de semana', '🎯', 'weekend_tasks', 5],
+      ['Romántico', 'Diste 10 reacciones de amor', '💝', 'reactions_given', 10],
+      ['Súper romántico', 'Diste 50 reacciones de amor', '💖✨', 'reactions_given', 50],
+      ['Organizador', 'Usaste todas las categorías', '📋', 'categories_used', 5],
+      ['Constante', '30 tareas completadas en un mes', '📅', 'monthly_tasks', 30],
+      ['Mesiversario', 'Celebraron su primer mesiversario juntos', '💕', 'mesiversario', 1],
+      ['Aniversario', '¡Feliz aniversario de amor!', '💍', 'aniversario', 1],
+      ['Amor eterno', '12 meses usando la app juntos', '💞', 'app_months', 12]
+    ];
+
+    for (const [name, description, emoji, condition_type, condition_value] of newAchievements) {
+      if (!existingNames.has(name)) {
+        await query(
+          'INSERT INTO AppChecklist_achievements (name, description, emoji, condition_type, condition_value) VALUES ($1, $2, $3, $4, $5)',
+          [name, description, emoji, condition_type, condition_value]
+        );
+      }
+    }
   }
 
   // Create categories table
@@ -180,6 +216,33 @@ export async function initDatabase() {
       UNIQUE(type, user_id)
     )
   `);
+
+  // Create push subscriptions table
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_push_subscriptions (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL REFERENCES AppChecklist_users(id),
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Create app usage tracking table for "app_months" achievement
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_app_usage (
+      id SERIAL PRIMARY KEY,
+      first_use DATE DEFAULT CURRENT_DATE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Initialize app usage if not exists
+  const existingUsage = await query('SELECT id FROM AppChecklist_app_usage');
+  if (existingUsage.length === 0) {
+    await query('INSERT INTO AppChecklist_app_usage (first_use) VALUES (CURRENT_DATE)');
+  }
 }
 
 export default pool;

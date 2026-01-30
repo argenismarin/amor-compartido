@@ -10,7 +10,50 @@ export async function GET() {
       LEFT JOIN AppChecklist_users u ON sd.user_id = u.id
       ORDER BY sd.date
     `);
-    return NextResponse.json(dates);
+
+    // Calculate mesiversario info
+    const anniversary = dates.find(d => d.type === 'anniversary');
+    let mesiversarioInfo = null;
+
+    if (anniversary?.date) {
+      const annivDate = new Date(anniversary.date);
+      const today = new Date();
+
+      // Calculate total days together
+      const daysTogether = Math.floor((today - annivDate) / (1000 * 60 * 60 * 24));
+
+      // Calculate months together
+      const monthsTogether = (today.getFullYear() - annivDate.getFullYear()) * 12 +
+                            (today.getMonth() - annivDate.getMonth());
+
+      // Check if today is a mesiversario (same day of month)
+      const isMesiversario = annivDate.getDate() === today.getDate() && monthsTogether > 0;
+
+      // Calculate days until next mesiversario
+      let nextMesiversario = new Date(today.getFullYear(), today.getMonth(), annivDate.getDate());
+      if (nextMesiversario <= today) {
+        nextMesiversario = new Date(today.getFullYear(), today.getMonth() + 1, annivDate.getDate());
+      }
+      const daysUntilNext = Math.ceil((nextMesiversario - today) / (1000 * 60 * 60 * 24));
+
+      // Check if today is the actual anniversary (same day and month)
+      const isAnniversary = annivDate.getDate() === today.getDate() &&
+                           annivDate.getMonth() === today.getMonth() &&
+                           today.getFullYear() > annivDate.getFullYear();
+      const yearsTogether = isAnniversary ? today.getFullYear() - annivDate.getFullYear() : 0;
+
+      mesiversarioInfo = {
+        daysTogether,
+        monthsTogether,
+        isMesiversario,
+        isAnniversary,
+        yearsTogether,
+        daysUntilNext: isMesiversario ? 0 : daysUntilNext,
+        anniversaryDate: anniversary.date
+      };
+    }
+
+    return NextResponse.json({ dates, mesiversarioInfo });
   } catch (error) {
     console.error('Error fetching special dates:', error);
     return NextResponse.json({ error: 'Failed to fetch special dates' }, { status: 500 });

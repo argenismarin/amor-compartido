@@ -20,6 +20,25 @@ const MOTIVATIONAL_MESSAGES = [
   '¡Cada tarea cuenta! 🎯',
   '¡Victoria tras victoria! 🏅',
   '¡Imparable! 💥',
+  '¡Tu amor es tu fuerza! 💖',
+  '¡Juntos lo lograron! 💞',
+  '¡El mejor equipo del mundo! 🌍',
+  '¡Amor en cada tarea! 💗',
+  '¡Haciendo magia juntos! ✨💕',
+  '¡Ese es mi amor! 🥰💪',
+  '¡El poder del amor! 💝',
+  '¡Conquistando el día! ☀️',
+  '¡Brillando como siempre! 🌟💕',
+  '¡El dúo perfecto! 👫✨',
+];
+
+// Mensajes especiales para mesiversarios
+const MESIVERSARIO_MESSAGES = [
+  '¡Felices {months} meses juntos! 💕',
+  '¡{months} meses de puro amor! 💖',
+  '¡Otro mes más amándote! 💞',
+  '¡{months} meses y contando! 🥰',
+  '¡Celebrando {months} meses de nosotros! 💗',
 ];
 
 // Emojis de corazones para las animaciones
@@ -70,6 +89,11 @@ export default function Home() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [specialDates, setSpecialDates] = useState([]);
   const [todaySpecialDate, setTodaySpecialDate] = useState(null);
+  const [mesiversarioInfo, setMesiversarioInfo] = useState(null);
+
+  // Push notification state
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState('default');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -140,6 +164,34 @@ export default function Home() {
     setTimeout(() => setCelebrationBanner(null), 3000);
   }, []);
 
+  // Trigger mesiversario celebration
+  const triggerMesiversarioCelebration = useCallback((months) => {
+    const message = MESIVERSARIO_MESSAGES[Math.floor(Math.random() * MESIVERSARIO_MESSAGES.length)]
+      .replace('{months}', months);
+    triggerConfetti();
+    triggerFloatingHearts();
+    showCelebrationBanner(message, '¡El amor crece cada día! 💕');
+  }, [triggerConfetti, triggerFloatingHearts, showCelebrationBanner]);
+
+  // Register Service Worker and check notification permission
+  useEffect(() => {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('Service Worker registrado:', registration);
+        })
+        .catch((error) => {
+          console.error('Error registrando Service Worker:', error);
+        });
+
+      // Check current notification permission
+      if ('Notification' in window) {
+        setNotificationPermission(Notification.permission);
+        setNotificationsEnabled(Notification.permission === 'granted');
+      }
+    }
+  }, []);
+
   // Fetch users on mount
   useEffect(() => {
     fetchUsers();
@@ -157,10 +209,31 @@ export default function Home() {
     }
   }, [currentUser, activeTab, selectedCategory]);
 
-  // Check for today's special date
+  // Check for today's special date and mesiversario
   useEffect(() => {
     checkTodaySpecialDate();
   }, [specialDates]);
+
+  // Celebrate mesiversario when detected
+  useEffect(() => {
+    if (mesiversarioInfo?.isMesiversario && !sessionStorage.getItem('mesiversarioCelebrated')) {
+      setTimeout(() => {
+        triggerMesiversarioCelebration(mesiversarioInfo.monthsTogether);
+        sessionStorage.setItem('mesiversarioCelebrated', 'true');
+      }, 1500);
+    }
+    if (mesiversarioInfo?.isAnniversary && !sessionStorage.getItem('anniversaryCelebrated')) {
+      setTimeout(() => {
+        triggerConfetti();
+        triggerFloatingHearts();
+        showCelebrationBanner(
+          `¡Feliz Aniversario #${mesiversarioInfo.yearsTogether}!`,
+          '¡Que sean muchos años más de amor! 💍💕'
+        );
+        sessionStorage.setItem('anniversaryCelebrated', 'true');
+      }, 1500);
+    }
+  }, [mesiversarioInfo, triggerMesiversarioCelebration, triggerConfetti, triggerFloatingHearts, showCelebrationBanner]);
 
   const fetchUsers = async () => {
     try {
@@ -241,7 +314,10 @@ export default function Home() {
     try {
       const res = await fetch('/api/special-dates');
       const data = await res.json();
-      setSpecialDates(data);
+      setSpecialDates(data.dates || data);
+      if (data.mesiversarioInfo) {
+        setMesiversarioInfo(data.mesiversarioInfo);
+      }
     } catch (error) {
       console.error('Error fetching special dates:', error);
     }
@@ -373,6 +449,87 @@ export default function Home() {
     }
   };
 
+  const enableNotifications = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      showToast('Tu navegador no soporta notificaciones', 'error');
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+
+      if (permission === 'granted') {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(
+            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
+          )
+        });
+
+        // Save subscription to server
+        await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser?.id,
+            subscription: subscription.toJSON()
+          })
+        });
+
+        setNotificationsEnabled(true);
+        showToast('¡Notificaciones activadas! 🔔');
+
+        // Show a test notification
+        registration.showNotification('Amor Compartido 💕', {
+          body: '¡Notificaciones activadas! Te avisaremos de lo importante.',
+          icon: '/icon-192.png',
+          badge: '/icon-192.png'
+        });
+      } else {
+        showToast('Permiso de notificaciones denegado', 'error');
+      }
+    } catch (error) {
+      console.error('Error enabling notifications:', error);
+      showToast('Error al activar notificaciones', 'error');
+    }
+  };
+
+  const disableNotifications = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        await subscription.unsubscribe();
+        await fetch(`/api/subscribe?endpoint=${encodeURIComponent(subscription.endpoint)}`, {
+          method: 'DELETE'
+        });
+      }
+
+      setNotificationsEnabled(false);
+      showToast('Notificaciones desactivadas');
+    } catch (error) {
+      console.error('Error disabling notifications:', error);
+      showToast('Error al desactivar notificaciones', 'error');
+    }
+  };
+
+  // Helper function for VAPID key conversion
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
   const handleTaskDelete = async (taskId) => {
     setConfirmDialog({
       message: '¿Eliminar esta tarea?',
@@ -501,6 +658,19 @@ export default function Home() {
         </div>
       )}
 
+      {/* Mesiversario Banner */}
+      {mesiversarioInfo?.isMesiversario && !todaySpecialDate && (
+        <div className="mesiversario-banner" role="banner">
+          <span className="mesiversario-emoji">💕</span>
+          <span className="mesiversario-text">
+            ¡Felices {mesiversarioInfo.monthsTogether} meses juntos!
+          </span>
+          <span className="mesiversario-days">
+            {mesiversarioInfo.daysTogether} días de amor
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <header className="header">
         <div className="header-content">
@@ -578,6 +748,16 @@ export default function Home() {
               <div className="stat-label">Total</div>
             </div>
           </div>
+          {mesiversarioInfo && mesiversarioInfo.monthsTogether > 0 && (
+            <div className="love-stats">
+              <span className="love-stat">💕 {mesiversarioInfo.monthsTogether} meses juntos</span>
+              {mesiversarioInfo.daysUntilNext > 0 && (
+                <span className="love-stat-next">
+                  Próximo mesiversario en {mesiversarioInfo.daysUntilNext} días
+                </span>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Assigned by Other - Collapsible */}
@@ -1025,6 +1205,30 @@ export default function Home() {
               <h2 className="modal-title">⚙️ Configuracion</h2>
               <button className="modal-close" onClick={() => setShowSettingsModal(false)}>×</button>
             </div>
+
+            <div className="settings-section">
+              <h3 className="settings-section-title">🔔 Notificaciones</h3>
+              <p className="settings-section-desc">
+                Recibe recordatorios de mesiversarios, logros y tareas de tu amor
+              </p>
+              <div className="notification-toggle">
+                {notificationsEnabled ? (
+                  <button className="notification-btn enabled" onClick={disableNotifications}>
+                    🔔 Notificaciones activadas
+                  </button>
+                ) : (
+                  <button className="notification-btn" onClick={enableNotifications}>
+                    🔕 Activar notificaciones
+                  </button>
+                )}
+                {notificationPermission === 'denied' && (
+                  <p className="notification-warning">
+                    ⚠️ Las notificaciones están bloqueadas. Habilítalas en la configuración de tu navegador.
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="settings-section">
               <h3 className="settings-section-title">💕 Fechas Especiales</h3>
               <p className="settings-section-desc">
@@ -1040,6 +1244,21 @@ export default function Home() {
                   onChange={e => saveSpecialDate('anniversary', e.target.value, null, 'Aniversario')}
                 />
               </div>
+
+              {mesiversarioInfo && (
+                <div className="mesiversario-info-box">
+                  <div className="mesiversario-info-stat">
+                    <span className="mesiversario-info-label">💕 Tiempo juntos:</span>
+                    <span className="mesiversario-info-value">{mesiversarioInfo.monthsTogether} meses ({mesiversarioInfo.daysTogether} días)</span>
+                  </div>
+                  {mesiversarioInfo.daysUntilNext > 0 && (
+                    <div className="mesiversario-info-stat">
+                      <span className="mesiversario-info-label">📅 Próximo mesiversario:</span>
+                      <span className="mesiversario-info-value">en {mesiversarioInfo.daysUntilNext} días</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="special-date-form">
                 <label className="form-label">Cumpleaños de {users[0]?.name || 'Usuario 1'}</label>
@@ -1077,6 +1296,12 @@ export default function Home() {
                   <span>🏆 Logros:</span>
                   <strong>{achievements.filter(a => a.unlocked).length}/{achievements.length}</strong>
                 </div>
+                {mesiversarioInfo && (
+                  <div className="settings-stat">
+                    <span>💕 Meses juntos:</span>
+                    <strong>{mesiversarioInfo.monthsTogether}</strong>
+                  </div>
+                )}
               </div>
             </div>
           </div>
