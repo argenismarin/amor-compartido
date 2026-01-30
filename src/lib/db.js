@@ -126,56 +126,47 @@ export async function initDatabase() {
     )
   `);
 
-  // Insert default achievements if not exist
-  const existingAchievements = await query('SELECT id FROM AppChecklist_achievements');
-  if (existingAchievements.length === 0) {
-    await query(`
-      INSERT INTO AppChecklist_achievements (name, description, emoji, condition_type, condition_value) VALUES
-      ('Primera tarea', 'Completaste tu primera tarea', '🌟', 'tasks_completed', 1),
-      ('Productivo', 'Completaste 10 tareas', '🏆', 'tasks_completed', 10),
-      ('Imparable', 'Completaste 50 tareas', '💪', 'tasks_completed', 50),
-      ('Centenario', 'Completaste 100 tareas', '💯', 'tasks_completed', 100),
-      ('En racha', '7 días seguidos completando tareas', '🔥', 'streak_days', 7),
-      ('Racha legendaria', '30 días seguidos', '⚡', 'streak_days', 30),
-      ('Pareja en equipo', 'Ambos completaron tareas el mismo día', '💑', 'team_day', 1),
-      ('Madrugador', 'Completaste una tarea antes de las 8am', '🌅', 'early_bird', 1),
-      ('Noctámbulo', 'Completaste una tarea después de las 10pm', '🌙', 'night_owl', 1),
-      ('Quinientos', '¡Medio millar de amor compartido!', '🌟💫', 'tasks_completed', 500),
-      ('Super racha', '2 semanas seguidas sin fallar', '🔥🔥', 'streak_days', 14),
-      ('Fin de semana productivo', '5 tareas en un fin de semana', '🎯', 'weekend_tasks', 5),
-      ('Romántico', 'Diste 10 reacciones de amor', '💝', 'reactions_given', 10),
-      ('Súper romántico', 'Diste 50 reacciones de amor', '💖✨', 'reactions_given', 50),
-      ('Organizador', 'Usaste todas las categorías', '📋', 'categories_used', 5),
-      ('Constante', '30 tareas completadas en un mes', '📅', 'monthly_tasks', 30),
-      ('Mesiversario', 'Celebraron su primer mesiversario juntos', '💕', 'mesiversario', 1),
-      ('Aniversario', '¡Feliz aniversario de amor!', '💍', 'aniversario', 1),
-      ('Amor eterno', '12 meses usando la app juntos', '💞', 'app_months', 12)
-    `);
-  } else if (existingAchievements.length < 19) {
-    // Add new achievements if they don't exist yet
-    const achievementNames = await query('SELECT name FROM AppChecklist_achievements');
-    const existingNames = new Set(achievementNames.map(a => a.name));
+  // Define all achievements
+  const allAchievements = [
+    ['Primera tarea', 'Completaste tu primera tarea', '🌟', 'tasks_completed', 1],
+    ['Productivo', 'Completaste 10 tareas', '🏆', 'tasks_completed', 10],
+    ['Imparable', 'Completaste 50 tareas', '💪', 'tasks_completed', 50],
+    ['Centenario', 'Completaste 100 tareas', '💯', 'tasks_completed', 100],
+    ['En racha', '7 días seguidos completando tareas', '🔥', 'streak_days', 7],
+    ['Racha legendaria', '30 días seguidos', '⚡', 'streak_days', 30],
+    ['Pareja en equipo', 'Ambos completaron tareas el mismo día', '💑', 'team_day', 1],
+    ['Madrugador', 'Completaste una tarea antes de las 8am', '🌅', 'early_bird', 1],
+    ['Noctámbulo', 'Completaste una tarea después de las 10pm', '🌙', 'night_owl', 1],
+    ['Quinientos', '¡Medio millar de amor compartido!', '🌟💫', 'tasks_completed', 500],
+    ['Super racha', '2 semanas seguidas sin fallar', '🔥🔥', 'streak_days', 14],
+    ['Fin de semana productivo', '5 tareas en un fin de semana', '🎯', 'weekend_tasks', 5],
+    ['Romántico', 'Diste 10 reacciones de amor', '💝', 'reactions_given', 10],
+    ['Súper romántico', 'Diste 50 reacciones de amor', '💖✨', 'reactions_given', 50],
+    ['Organizador', 'Usaste todas las categorías', '📋', 'categories_used', 5],
+    ['Constante', '30 tareas completadas en un mes', '📅', 'monthly_tasks', 30],
+    ['Mesiversario', 'Celebraron su primer mesiversario juntos', '💕', 'mesiversario', 1],
+    ['Aniversario', '¡Feliz aniversario de amor!', '💍', 'aniversario', 1],
+    ['Amor eterno', '12 meses usando la app juntos', '💞', 'app_months', 12]
+  ];
 
-    const newAchievements = [
-      ['Quinientos', '¡Medio millar de amor compartido!', '🌟💫', 'tasks_completed', 500],
-      ['Super racha', '2 semanas seguidas sin fallar', '🔥🔥', 'streak_days', 14],
-      ['Fin de semana productivo', '5 tareas en un fin de semana', '🎯', 'weekend_tasks', 5],
-      ['Romántico', 'Diste 10 reacciones de amor', '💝', 'reactions_given', 10],
-      ['Súper romántico', 'Diste 50 reacciones de amor', '💖✨', 'reactions_given', 50],
-      ['Organizador', 'Usaste todas las categorías', '📋', 'categories_used', 5],
-      ['Constante', '30 tareas completadas en un mes', '📅', 'monthly_tasks', 30],
-      ['Mesiversario', 'Celebraron su primer mesiversario juntos', '💕', 'mesiversario', 1],
-      ['Aniversario', '¡Feliz aniversario de amor!', '💍', 'aniversario', 1],
-      ['Amor eterno', '12 meses usando la app juntos', '💞', 'app_months', 12]
-    ];
+  // Remove duplicate achievements (keep lowest id for each name)
+  await query(`
+    DELETE FROM AppChecklist_achievements a
+    USING AppChecklist_achievements b
+    WHERE a.name = b.name AND a.id > b.id
+  `);
 
-    for (const [name, description, emoji, condition_type, condition_value] of newAchievements) {
-      if (!existingNames.has(name)) {
-        await query(
-          'INSERT INTO AppChecklist_achievements (name, description, emoji, condition_type, condition_value) VALUES ($1, $2, $3, $4, $5)',
-          [name, description, emoji, condition_type, condition_value]
-        );
-      }
+  // Get existing achievement names
+  const existingAchievements = await query('SELECT name FROM AppChecklist_achievements');
+  const existingNames = new Set(existingAchievements.map(a => a.name));
+
+  // Insert missing achievements
+  for (const [name, description, emoji, condition_type, condition_value] of allAchievements) {
+    if (!existingNames.has(name)) {
+      await query(
+        'INSERT INTO AppChecklist_achievements (name, description, emoji, condition_type, condition_value) VALUES ($1, $2, $3, $4, $5)',
+        [name, description, emoji, condition_type, condition_value]
+      );
     }
   }
 

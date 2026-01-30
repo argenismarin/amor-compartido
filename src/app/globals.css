@@ -1404,38 +1404,39 @@ body {
    ============================================ */
 .category-filter {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-bottom: 16px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  -webkit-overflow-scrolling: touch;
+  justify-content: center;
 }
 
 .category-chip {
-  padding: 8px 14px;
+  padding: 6px 12px;
   border: none;
   background: var(--surface);
   color: var(--text-light);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  border-radius: 20px;
+  border-radius: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .category-chip:hover {
   background: var(--primary-light);
+  transform: translateY(-1px);
 }
 
 .category-chip.active {
   background: var(--primary);
   color: white;
+  box-shadow: 0 2px 8px var(--shadow);
 }
 
 [data-user="argenis"] .category-chip.active {
   background: var(--burgundy);
+  box-shadow: 0 2px 8px var(--burgundy-shadow);
 }
 
 /* ============================================
