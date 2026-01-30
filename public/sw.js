@@ -1,12 +1,13 @@
 // Service Worker para Amor Compartido
 // Maneja notificaciones push y cache básico
 
-const CACHE_NAME = 'amor-compartido-v1';
+const CACHE_NAME = 'amor-compartido-v2';
 const urlsToCache = [
-  '/',
   '/icon-192.png',
   '/icon-512.png'
 ];
+
+// NO cachear archivos de Next.js (_next/) para evitar problemas de versiones
 
 // Mensajes bonitos para notificaciones
 const NOTIFICATION_MESSAGES = {
@@ -70,8 +71,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - network first for dynamic content, cache for static assets
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // Never cache Next.js build files or API calls - always go to network
+  if (url.pathname.startsWith('/_next/') || url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // For other requests, try cache first, then network
   event.respondWith(
     caches.match(event.request)
       .then((response) => response || fetch(event.request))
