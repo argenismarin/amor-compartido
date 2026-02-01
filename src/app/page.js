@@ -1347,7 +1347,7 @@ export default function Home() {
       </main>
 
       {/* FAB */}
-      <button className="fab" onClick={openNewTask} aria-label="Nueva tarea">
+      <button className="fab" onClick={() => openNewTask()} aria-label="Nueva tarea">
         +
       </button>
 
