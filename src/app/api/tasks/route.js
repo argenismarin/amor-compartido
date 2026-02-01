@@ -8,16 +8,19 @@ export async function GET(request) {
     const userId = searchParams.get('userId');
     const filter = searchParams.get('filter');
     const categoryId = searchParams.get('categoryId');
+    const projectId = searchParams.get('projectId');
 
     let sql = `
       SELECT t.*,
         u_to.name as assigned_to_name, u_to.avatar_emoji as assigned_to_avatar,
         u_by.name as assigned_by_name, u_by.avatar_emoji as assigned_by_avatar,
-        c.name as category_name, c.emoji as category_emoji, c.color as category_color
+        c.name as category_name, c.emoji as category_emoji, c.color as category_color,
+        p.name as project_name, p.emoji as project_emoji, p.color as project_color
       FROM AppChecklist_tasks t
       JOIN AppChecklist_users u_to ON t.assigned_to = u_to.id
       JOIN AppChecklist_users u_by ON t.assigned_by = u_by.id
       LEFT JOIN AppChecklist_categories c ON t.category_id = c.id
+      LEFT JOIN AppChecklist_projects p ON t.project_id = p.id
     `;
 
     let params = [];
@@ -50,6 +53,15 @@ export async function GET(request) {
       paramIndex++;
     }
 
+    // Filter by project: 'null' for tasks without project, number for specific project
+    if (projectId === 'null') {
+      addWhere(`t.project_id IS NULL`);
+    } else if (projectId) {
+      addWhere(`t.project_id = $${paramIndex}`);
+      params.push(projectId);
+      paramIndex++;
+    }
+
     sql += ' ORDER BY t.is_completed ASC, t.priority DESC, t.created_at DESC';
 
     const tasks = await query(sql, params);
@@ -62,13 +74,13 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { title, description, assigned_to, assigned_by, due_date, priority, category_id, recurrence, recurrence_days } = await request.json();
+    const { title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days } = await request.json();
 
     const result = await queryOne(
-      `INSERT INTO AppChecklist_tasks (title, description, assigned_to, assigned_by, due_date, priority, category_id, recurrence, recurrence_days)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      `INSERT INTO AppChecklist_tasks (title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
       [title, description || null, assigned_to, assigned_by, due_date || null, priority || 'medium',
-       category_id || null, recurrence || null, recurrence_days || null]
+       category_id || null, project_id || null, recurrence || null, recurrence_days || null]
     );
 
     return NextResponse.json({ success: true, id: result.id });

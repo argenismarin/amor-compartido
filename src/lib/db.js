@@ -46,6 +46,21 @@ export async function initDatabase() {
     await query(`UPDATE AppChecklist_users SET name = 'Argenis', avatar_emoji = '🍷' WHERE id = 2`);
   }
 
+  // Create projects table
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_projects (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      emoji VARCHAR(10) DEFAULT '📁',
+      color VARCHAR(20) DEFAULT '#6366f1',
+      due_date DATE NULL,
+      is_archived BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Create tasks table
   await query(`
     CREATE TABLE IF NOT EXISTS AppChecklist_tasks (
@@ -60,6 +75,7 @@ export async function initDatabase() {
       priority VARCHAR(10) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
       reaction VARCHAR(10) NULL,
       category_id INT NULL,
+      project_id INT NULL,
       recurrence VARCHAR(20) NULL CHECK (recurrence IN ('daily', 'weekly', 'monthly', 'custom')),
       recurrence_days TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -67,7 +83,7 @@ export async function initDatabase() {
     )
   `);
 
-  // Add reaction column if not exists (for existing databases)
+  // Add columns if not exist (for existing databases)
   await query(`
     DO $$
     BEGIN
@@ -86,6 +102,10 @@ export async function initDatabase() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                      WHERE table_name = 'appchecklist_tasks' AND column_name = 'recurrence_days') THEN
         ALTER TABLE AppChecklist_tasks ADD COLUMN recurrence_days TEXT NULL;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'project_id') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN project_id INT NULL;
       END IF;
     END $$;
   `);
@@ -250,8 +270,10 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_tasks_assigned_by ON AppChecklist_tasks(assigned_by);
     CREATE INDEX IF NOT EXISTS idx_tasks_completed_user ON AppChecklist_tasks(is_completed, assigned_to);
     CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON AppChecklist_tasks(completed_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_tasks_project ON AppChecklist_tasks(project_id);
     CREATE INDEX IF NOT EXISTS idx_streaks_user ON AppChecklist_streaks(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_achievements ON AppChecklist_user_achievements(user_id);
+    CREATE INDEX IF NOT EXISTS idx_projects_archived ON AppChecklist_projects(is_archived);
   `);
 }
 

@@ -82,6 +82,17 @@ export default function Home() {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
 
+  // Projects state
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null); // null = ver lista, id = ver proyecto
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [projectFormData, setProjectFormData] = useState({
+    name: '', description: '', emoji: '📁', color: '#6366f1', due_date: ''
+  });
+  const [projectTasks, setProjectTasks] = useState([]);
+  const [looseTasks, setLooseTasks] = useState([]);
+
   // History state
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [history, setHistory] = useState({ tasks: [], stats: { thisWeek: 0, total: 0 } });
@@ -104,6 +115,7 @@ export default function Home() {
     due_date: '',
     priority: 'medium',
     category_id: null,
+    project_id: null,
     recurrence: null
   });
 
@@ -198,6 +210,7 @@ export default function Home() {
     fetchUsers();
     fetchCategories();
     fetchSpecialDates();
+    fetchProjects();
   }, []);
 
   // Fetch tasks when user changes
@@ -210,6 +223,17 @@ export default function Home() {
     }
   }, [currentUser, activeTab, selectedCategory]);
 
+  // Fetch project tasks when project is selected
+  useEffect(() => {
+    if (activeTab === 'projects') {
+      if (selectedProject) {
+        fetchProjectTasks(selectedProject);
+      } else {
+        fetchLooseTasks();
+      }
+    }
+  }, [activeTab, selectedProject]);
+
   // Real-time sync: Auto-refresh tasks every 5 seconds
   useEffect(() => {
     if (!currentUser) return;
@@ -219,6 +243,14 @@ export default function Home() {
       if (document.visibilityState === 'visible') {
         fetchTasks(false); // false = sin mostrar skeleton
         fetchAssignedByOther();
+        fetchProjects();
+        if (activeTab === 'projects') {
+          if (selectedProject) {
+            fetchProjectTasks(selectedProject);
+          } else {
+            fetchLooseTasks();
+          }
+        }
       }
     }, 5000); // 5 segundos
 
@@ -227,6 +259,14 @@ export default function Home() {
       if (document.visibilityState === 'visible') {
         fetchTasks(false);
         fetchAssignedByOther();
+        fetchProjects();
+        if (activeTab === 'projects') {
+          if (selectedProject) {
+            fetchProjectTasks(selectedProject);
+          } else {
+            fetchLooseTasks();
+          }
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -235,7 +275,7 @@ export default function Home() {
       clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser, activeTab, selectedCategory]);
+  }, [currentUser, activeTab, selectedCategory, selectedProject]);
 
   // Check for today's special date and mesiversario
   useEffect(() => {
@@ -318,6 +358,36 @@ export default function Home() {
       setCategories(data);
     } catch (error) {
       console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch('/api/projects');
+      const data = await res.json();
+      setProjects(data);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
+  const fetchProjectTasks = async (projectId) => {
+    try {
+      const res = await fetch(`/api/tasks?projectId=${projectId}`);
+      const data = await res.json();
+      setProjectTasks(data);
+    } catch (error) {
+      console.error('Error fetching project tasks:', error);
+    }
+  };
+
+  const fetchLooseTasks = async () => {
+    try {
+      const res = await fetch('/api/tasks?projectId=null');
+      const data = await res.json();
+      setLooseTasks(data);
+    } catch (error) {
+      console.error('Error fetching loose tasks:', error);
     }
   };
 
@@ -429,9 +499,13 @@ export default function Home() {
 
     const previousTasks = tasks;
     const previousAssignedByOther = assignedByOther;
+    const previousProjectTasks = projectTasks;
+    const previousLooseTasks = looseTasks;
 
     setTasks(updateTaskInList);
     setAssignedByOther(updateTaskInList);
+    setProjectTasks(updateTaskInList);
+    setLooseTasks(updateTaskInList);
 
     // Celebrate immediately when marking as complete
     if (newCompletedStatus) {
@@ -457,11 +531,18 @@ export default function Home() {
         setTimeout(() => checkNewAchievements(), 500);
         fetchStreak();
       }
+
+      // Refresh projects to update counts
+      if (activeTab === 'projects') {
+        fetchProjects();
+      }
     } catch (error) {
       // Rollback on error
       console.error('Error toggling task:', error);
       setTasks(previousTasks);
       setAssignedByOther(previousAssignedByOther);
+      setProjectTasks(previousProjectTasks);
+      setLooseTasks(previousLooseTasks);
       showToast('Error al actualizar la tarea', 'error');
     } finally {
       setTogglingTaskId(null);
@@ -476,9 +557,13 @@ export default function Home() {
 
     const previousTasks = tasks;
     const previousAssignedByOther = assignedByOther;
+    const previousProjectTasks = projectTasks;
+    const previousLooseTasks = looseTasks;
 
     setTasks(updateTaskInList);
     setAssignedByOther(updateTaskInList);
+    setProjectTasks(updateTaskInList);
+    setLooseTasks(updateTaskInList);
     showToast('Reaccion enviada 💕');
 
     try {
@@ -496,6 +581,8 @@ export default function Home() {
       console.error('Error adding reaction:', error);
       setTasks(previousTasks);
       setAssignedByOther(previousAssignedByOther);
+      setProjectTasks(previousProjectTasks);
+      setLooseTasks(previousLooseTasks);
       showToast('Error al enviar reaccion', 'error');
     }
   };
@@ -513,6 +600,76 @@ export default function Home() {
       console.error('Error saving special date:', error);
       showToast('Error al guardar fecha', 'error');
     }
+  };
+
+  const handleProjectSubmit = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+
+    const isEditing = !!editingProject;
+    const method = isEditing ? 'PUT' : 'POST';
+    const url = isEditing ? `/api/projects/${editingProject.id}` : '/api/projects';
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectFormData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Server error');
+      }
+
+      setShowProjectModal(false);
+      setEditingProject(null);
+      setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
+      fetchProjects();
+      showToast(isEditing ? 'Proyecto actualizado' : 'Proyecto creado 📁');
+    } catch (error) {
+      console.error('Error saving project:', error);
+      showToast('Error al guardar el proyecto', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleProjectDelete = async (projectId) => {
+    setConfirmDialog({
+      message: '¿Archivar este proyecto?',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const response = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+          if (!response.ok) throw new Error('Server error');
+          fetchProjects();
+          setSelectedProject(null);
+          showToast('Proyecto archivado');
+        } catch (error) {
+          console.error('Error archiving project:', error);
+          showToast('Error al archivar el proyecto', 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  const openNewProject = () => {
+    setEditingProject(null);
+    setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
+    setShowProjectModal(true);
+  };
+
+  const openEditProject = (project) => {
+    setEditingProject(project);
+    setProjectFormData({
+      name: project.name,
+      description: project.description || '',
+      emoji: project.emoji || '📁',
+      color: project.color || '#6366f1',
+      due_date: project.due_date ? project.due_date.split('T')[0] : ''
+    });
+    setShowProjectModal(true);
   };
 
   const enableNotifications = async () => {
@@ -603,13 +760,18 @@ export default function Home() {
         setConfirmDialog(null);
 
         // Save task for potential rollback
-        const deletedTask = tasks.find(t => t.id === taskId) || assignedByOther.find(t => t.id === taskId);
+        const deletedTask = tasks.find(t => t.id === taskId) || assignedByOther.find(t => t.id === taskId) ||
+                           projectTasks.find(t => t.id === taskId) || looseTasks.find(t => t.id === taskId);
         const previousTasks = tasks;
         const previousAssignedByOther = assignedByOther;
+        const previousProjectTasks = projectTasks;
+        const previousLooseTasks = looseTasks;
 
         // Optimistic update - remove from lists immediately
         setTasks(prev => prev.filter(t => t.id !== taskId));
         setAssignedByOther(prev => prev.filter(t => t.id !== taskId));
+        setProjectTasks(prev => prev.filter(t => t.id !== taskId));
+        setLooseTasks(prev => prev.filter(t => t.id !== taskId));
         showToast('Tarea eliminada');
 
         try {
@@ -618,11 +780,18 @@ export default function Home() {
           if (!response.ok) {
             throw new Error('Server error');
           }
+
+          // Refresh projects to update counts
+          if (activeTab === 'projects') {
+            fetchProjects();
+          }
         } catch (error) {
           // Rollback on error
           console.error('Error deleting task:', error);
           setTasks(previousTasks);
           setAssignedByOther(previousAssignedByOther);
+          setProjectTasks(previousProjectTasks);
+          setLooseTasks(previousLooseTasks);
           showToast('Error al eliminar la tarea', 'error');
         }
       },
@@ -683,8 +852,18 @@ export default function Home() {
 
     setShowModal(false);
     setEditingTask(null);
-    setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, recurrence: null });
+    setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, project_id: null, recurrence: null });
     showToast(isEditing ? 'Tarea actualizada' : 'Tarea creada 💕');
+
+    // Refresh project data if we're in projects tab
+    if (activeTab === 'projects') {
+      fetchProjects();
+      if (selectedProject) {
+        fetchProjectTasks(selectedProject);
+      } else {
+        fetchLooseTasks();
+      }
+    }
 
     try {
       const response = await fetch(url, {
@@ -719,7 +898,7 @@ export default function Home() {
     }
   };
 
-  const openNewTask = () => {
+  const openNewTask = (projectId = null) => {
     setEditingTask(null);
     setFormData({
       title: '',
@@ -728,6 +907,7 @@ export default function Home() {
       due_date: '',
       priority: 'medium',
       category_id: null,
+      project_id: projectId || (activeTab === 'projects' && selectedProject ? selectedProject : null),
       recurrence: null
     });
     setShowModal(true);
@@ -742,6 +922,7 @@ export default function Home() {
       due_date: task.due_date ? task.due_date.split('T')[0] : '',
       priority: task.priority,
       category_id: task.category_id || null,
+      project_id: task.project_id || null,
       recurrence: task.recurrence || null
     });
     setShowModal(true);
@@ -947,20 +1128,26 @@ export default function Home() {
         <div className="tabs">
           <button
             className={`tab ${activeTab === 'myTasks' ? 'active' : ''}`}
-            onClick={() => setActiveTab('myTasks')}
+            onClick={() => { setActiveTab('myTasks'); setSelectedProject(null); }}
           >
             📋 Mis Tareas
           </button>
           <button
             className={`tab ${activeTab === 'assignedToOther' ? 'active' : ''}`}
-            onClick={() => setActiveTab('assignedToOther')}
+            onClick={() => { setActiveTab('assignedToOther'); setSelectedProject(null); }}
           >
             💝 Para {getOtherUser()?.name}
           </button>
+          <button
+            className={`tab ${activeTab === 'projects' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('projects'); setSelectedProject(null); }}
+          >
+            📁 Proyectos
+          </button>
         </div>
 
-        {/* Category Filter */}
-        {categories.length > 0 && (
+        {/* Category Filter - only show for myTasks and assignedToOther */}
+        {activeTab !== 'projects' && categories.length > 0 && (
           <div className="category-filter">
             <button
               className={`category-chip ${selectedCategory === null ? 'active' : ''}`}
@@ -981,44 +1168,179 @@ export default function Home() {
           </div>
         )}
 
-        {/* Task List */}
-        <div className="task-list">
-          {tasksLoading ? (
-            // Show skeleton loaders while loading
-            <>
-              <TaskCardSkeleton />
-              <TaskCardSkeleton />
-              <TaskCardSkeleton />
-            </>
-          ) : tasks.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">💕</div>
-              <div className="empty-state-title">No hay tareas aún</div>
-              <div className="empty-state-text">
-                {activeTab === 'myTasks'
-                  ? 'Crea una nueva tarea para ti'
-                  : `Asigna una tarea a ${getOtherUser()?.name}`
-                }
+        {/* Projects View */}
+        {activeTab === 'projects' && (
+          <>
+            {selectedProject ? (
+              // View tasks of selected project
+              <div className="project-tasks-view">
+                {(() => {
+                  const project = projects.find(p => p.id === selectedProject);
+                  return project ? (
+                    <div className="project-header-detail">
+                      <button
+                        className="back-button"
+                        onClick={() => setSelectedProject(null)}
+                      >
+                        ← Volver
+                      </button>
+                      <div className="project-title-row">
+                        <span className="project-emoji-large">{project.emoji}</span>
+                        <div className="project-info">
+                          <h2 className="project-name-large">{project.name}</h2>
+                          {project.description && (
+                            <p className="project-description-large">{project.description}</p>
+                          )}
+                        </div>
+                        <div className="project-actions-header">
+                          <button
+                            className="project-action-btn"
+                            onClick={() => openEditProject(project)}
+                            aria-label="Editar proyecto"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            className="project-action-btn delete"
+                            onClick={() => handleProjectDelete(project.id)}
+                            aria-label="Archivar proyecto"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                      <div className="project-progress-bar">
+                        <div
+                          className="project-progress-fill"
+                          style={{
+                            width: `${project.total_tasks > 0 ? (project.completed_tasks / project.total_tasks) * 100 : 0}%`,
+                            backgroundColor: project.color
+                          }}
+                        />
+                      </div>
+                      <div className="project-stats-detail">
+                        <span>{project.completed_tasks}/{project.total_tasks} tareas</span>
+                        {project.due_date && (
+                          <span>📅 {new Date(project.due_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+                <div className="task-list">
+                  {projectTasks.length === 0 ? (
+                    <div className="empty-state">
+                      <div className="empty-state-icon">📋</div>
+                      <div className="empty-state-title">Sin tareas en este proyecto</div>
+                      <div className="empty-state-text">Agrega tareas con el botón +</div>
+                    </div>
+                  ) : (
+                    projectTasks.map(task => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        onToggle={handleTaskToggle}
+                        onEdit={openEditTask}
+                        onDelete={handleTaskDelete}
+                        onReaction={handleReaction}
+                        showAssignedBy={true}
+                        currentUserId={currentUser?.id}
+                        assignedByName={task.assigned_by_name}
+                        togglingTaskId={togglingTaskId}
+                        reactionEmojis={REACTION_EMOJIS}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            tasks.map(task => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onToggle={handleTaskToggle}
-                onEdit={openEditTask}
-                onDelete={handleTaskDelete}
-                onReaction={handleReaction}
-                showAssignedBy={activeTab === 'myTasks'}
-                currentUserId={currentUser?.id}
-                assignedByName={task.assigned_by_name}
-                togglingTaskId={togglingTaskId}
-                reactionEmojis={REACTION_EMOJIS}
-              />
-            ))
-          )}
-        </div>
+            ) : (
+              // View project list
+              <div className="projects-view">
+                <div className="projects-grid">
+                  {projects.map(project => (
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      onSelect={() => setSelectedProject(project.id)}
+                      onEdit={() => openEditProject(project)}
+                      onDelete={() => handleProjectDelete(project.id)}
+                    />
+                  ))}
+                  <button className="add-project-card" onClick={openNewProject}>
+                    <span className="add-project-icon">+</span>
+                    <span className="add-project-text">Nuevo Proyecto</span>
+                  </button>
+                </div>
+
+                {/* Loose tasks section */}
+                {looseTasks.length > 0 && (
+                  <div className="loose-tasks-section">
+                    <h3 className="loose-tasks-title">📌 Tareas sueltas</h3>
+                    <p className="loose-tasks-subtitle">Tareas sin proyecto asignado</p>
+                    <div className="task-list">
+                      {looseTasks.map(task => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onToggle={handleTaskToggle}
+                          onEdit={openEditTask}
+                          onDelete={handleTaskDelete}
+                          onReaction={handleReaction}
+                          showAssignedBy={true}
+                          currentUserId={currentUser?.id}
+                          assignedByName={task.assigned_by_name}
+                          togglingTaskId={togglingTaskId}
+                          reactionEmojis={REACTION_EMOJIS}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Task List - only show for myTasks and assignedToOther */}
+        {activeTab !== 'projects' && (
+          <div className="task-list">
+            {tasksLoading ? (
+              // Show skeleton loaders while loading
+              <>
+                <TaskCardSkeleton />
+                <TaskCardSkeleton />
+                <TaskCardSkeleton />
+              </>
+            ) : tasks.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">💕</div>
+                <div className="empty-state-title">No hay tareas aún</div>
+                <div className="empty-state-text">
+                  {activeTab === 'myTasks'
+                    ? 'Crea una nueva tarea para ti'
+                    : `Asigna una tarea a ${getOtherUser()?.name}`
+                  }
+                </div>
+              </div>
+            ) : (
+              tasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onToggle={handleTaskToggle}
+                  onEdit={openEditTask}
+                  onDelete={handleTaskDelete}
+                  onReaction={handleReaction}
+                  showAssignedBy={activeTab === 'myTasks'}
+                  currentUserId={currentUser?.id}
+                  assignedByName={task.assigned_by_name}
+                  togglingTaskId={togglingTaskId}
+                  reactionEmojis={REACTION_EMOJIS}
+                />
+              ))
+            )}
+          </div>
+        )}
       </main>
 
       {/* FAB */}
@@ -1109,6 +1431,33 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Project selector - only show if there are projects */}
+              {projects.length > 0 && (
+                <div className="form-group">
+                  <label className="form-label">Proyecto (opcional)</label>
+                  <div className="project-selector">
+                    <button
+                      type="button"
+                      className={`project-option ${formData.project_id === null ? 'selected' : ''}`}
+                      onClick={() => setFormData({...formData, project_id: null})}
+                    >
+                      Sin proyecto
+                    </button>
+                    {projects.map(proj => (
+                      <button
+                        type="button"
+                        key={proj.id}
+                        className={`project-option ${formData.project_id === proj.id ? 'selected' : ''}`}
+                        onClick={() => setFormData({...formData, project_id: proj.id})}
+                        style={{ '--project-color': proj.color }}
+                      >
+                        {proj.emoji} {proj.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label">Categoria (opcional)</label>
                 <div className="category-selector">
@@ -1156,6 +1505,90 @@ export default function Home() {
 
               <button type="submit" className="submit-btn" disabled={isSaving}>
                 {isSaving ? 'Guardando...' : (editingTask ? 'Guardar cambios' : 'Crear tarea')} {!isSaving && '💕'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Project Modal */}
+      {showProjectModal && (
+        <div className="modal-overlay" onClick={() => setShowProjectModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">
+                {editingProject ? '✏️ Editar proyecto' : '📁 Nuevo proyecto'}
+              </h2>
+              <button className="modal-close" onClick={() => setShowProjectModal(false)}>×</button>
+            </div>
+            <form onSubmit={handleProjectSubmit}>
+              <div className="form-group">
+                <label className="form-label">Nombre del proyecto</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={projectFormData.name}
+                  onChange={e => setProjectFormData({...projectFormData, name: e.target.value})}
+                  placeholder="Ej: App Minera, Vacaciones, etc."
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Descripción (opcional)</label>
+                <textarea
+                  className="form-textarea"
+                  value={projectFormData.description}
+                  onChange={e => setProjectFormData({...projectFormData, description: e.target.value})}
+                  placeholder="Describe el proyecto..."
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Emoji</label>
+                <div className="emoji-selector">
+                  {['📁', '🚀', '💼', '🏠', '🎯', '💡', '🎨', '📱', '💻', '🛒', '✈️', '🎁', '📚', '🏋️', '🎵'].map(emoji => (
+                    <button
+                      type="button"
+                      key={emoji}
+                      className={`emoji-option ${projectFormData.emoji === emoji ? 'selected' : ''}`}
+                      onClick={() => setProjectFormData({...projectFormData, emoji})}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Color</label>
+                <div className="color-selector">
+                  {['#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'].map(color => (
+                    <button
+                      type="button"
+                      key={color}
+                      className={`color-option ${projectFormData.color === color ? 'selected' : ''}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setProjectFormData({...projectFormData, color})}
+                      aria-label={`Color ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Fecha límite (opcional)</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={projectFormData.due_date}
+                  onChange={e => setProjectFormData({...projectFormData, due_date: e.target.value})}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+
+              <button type="submit" className="submit-btn" disabled={isSaving}>
+                {isSaving ? 'Guardando...' : (editingProject ? 'Guardar cambios' : 'Crear proyecto')} {!isSaving && '📁'}
               </button>
             </form>
           </div>
@@ -1478,6 +1911,68 @@ function TaskCardSkeleton() {
           <div className="skeleton skeleton-action-btn"></div>
           <div className="skeleton skeleton-action-btn"></div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ProjectCard Component
+function ProjectCard({ project, onSelect, onEdit, onDelete }) {
+  const progressPercentage = project.total_tasks > 0
+    ? Math.round((project.completed_tasks / project.total_tasks) * 100)
+    : 0;
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  };
+
+  return (
+    <div
+      className="project-card"
+      onClick={onSelect}
+      style={{ '--project-color': project.color }}
+    >
+      <div className="project-card-header">
+        <span className="project-card-emoji">{project.emoji}</span>
+        <div className="project-card-actions" onClick={e => e.stopPropagation()}>
+          <button
+            className="project-action-btn"
+            onClick={onEdit}
+            aria-label="Editar proyecto"
+          >
+            ✏️
+          </button>
+          <button
+            className="project-action-btn delete"
+            onClick={onDelete}
+            aria-label="Archivar proyecto"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+      <h3 className="project-card-name">{project.name}</h3>
+      {project.description && (
+        <p className="project-card-description">{project.description}</p>
+      )}
+      <div className="project-card-progress">
+        <div className="project-card-progress-bar">
+          <div
+            className="project-card-progress-fill"
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+        <span className="project-card-progress-text">
+          {project.completed_tasks}/{project.total_tasks}
+        </span>
+      </div>
+      <div className="project-card-footer">
+        {project.due_date && (
+          <span className="project-card-date">📅 {formatDate(project.due_date)}</span>
+        )}
+        <span className="project-card-percentage">{progressPercentage}%</span>
       </div>
     </div>
   );

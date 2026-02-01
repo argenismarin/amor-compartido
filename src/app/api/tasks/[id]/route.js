@@ -50,14 +50,14 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ success: true });
     } else {
       // Update task details
-      const { title, description, assigned_to, due_date, priority, category_id, recurrence, recurrence_days } = body;
+      const { title, description, assigned_to, due_date, priority, category_id, project_id, recurrence, recurrence_days } = body;
       await query(
         `UPDATE AppChecklist_tasks
          SET title = $1, description = $2, assigned_to = $3, due_date = $4, priority = $5,
-             category_id = $6, recurrence = $7, recurrence_days = $8, updated_at = NOW()
-         WHERE id = $9`,
+             category_id = $6, project_id = $7, recurrence = $8, recurrence_days = $9, updated_at = NOW()
+         WHERE id = $10`,
         [title, description || null, assigned_to, due_date || null, priority,
-         category_id || null, recurrence || null, recurrence_days || null, id]
+         category_id || null, project_id || null, recurrence || null, recurrence_days || null, id]
       );
     }
 
