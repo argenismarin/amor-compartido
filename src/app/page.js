@@ -210,6 +210,33 @@ export default function Home() {
     }
   }, [currentUser, activeTab, selectedCategory]);
 
+  // Real-time sync: Auto-refresh tasks every 5 seconds
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const pollInterval = setInterval(() => {
+      // Solo hacer polling si la página está visible
+      if (document.visibilityState === 'visible') {
+        fetchTasks(false); // false = sin mostrar skeleton
+        fetchAssignedByOther();
+      }
+    }, 5000); // 5 segundos
+
+    // Refrescar inmediatamente al volver a la pestaña
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchTasks(false);
+        fetchAssignedByOther();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [currentUser, activeTab, selectedCategory]);
+
   // Check for today's special date and mesiversario
   useEffect(() => {
     checkTodaySpecialDate();
