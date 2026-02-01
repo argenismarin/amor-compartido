@@ -6,15 +6,20 @@ export async function PUT(request, { params }) {
     const { id } = await params;
     const body = await request.json();
 
+    console.log('PUT /api/tasks/[id] - id:', id, 'body:', body);
+
     if (body.toggle_complete !== undefined) {
       // Toggle completion status
+      console.log('Fetching task...');
       const task = await queryOne('SELECT * FROM AppChecklist_tasks WHERE id = $1', [id]);
+      console.log('Task found:', task);
 
       if (!task) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
       }
 
       const newCompletedStatus = !task.is_completed;
+      console.log('Updating to completed:', newCompletedStatus);
 
       await query(
         `UPDATE AppChecklist_tasks
@@ -24,10 +29,13 @@ export async function PUT(request, { params }) {
          WHERE id = $3`,
         [newCompletedStatus, newCompletedStatus ? new Date() : null, id]
       );
+      console.log('Task updated successfully');
 
       // Update streak if completing a task
       if (newCompletedStatus) {
+        console.log('Updating streak for user:', task.assigned_to);
         await updateStreak(task.assigned_to);
+        console.log('Streak updated');
       }
 
       return NextResponse.json({ success: true, completed: newCompletedStatus });
@@ -65,30 +73,53 @@ async function updateStreak(userId) {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    // Single UPSERT query with CASE logic to handle all scenarios
-    // COALESCE handles NULL last_activity by treating it as a new streak
-    await query(`
-      INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity, updated_at)
-      VALUES ($1, 1, 1, $2, NOW())
-      ON CONFLICT (user_id) DO UPDATE SET
-        current_streak = CASE
-          WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $2::date THEN AppChecklist_streaks.current_streak
-          WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $3::date THEN AppChecklist_streaks.current_streak + 1
-          ELSE 1
-        END,
-        best_streak = GREATEST(
-          AppChecklist_streaks.best_streak,
-          CASE
-            WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $2::date THEN AppChecklist_streaks.current_streak
-            WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $3::date THEN AppChecklist_streaks.current_streak + 1
-            ELSE 1
-          END
-        ),
-        last_activity = $2,
-        updated_at = NOW()
-    `, [userId, today, yesterdayStr]);
+    console.log('updateStreak - userId:', userId, 'today:', today, 'yesterday:', yesterdayStr);
+
+    // Simple approach: first check if streak exists
+    const existingStreak = await queryOne(
+      'SELECT * FROM AppChecklist_streaks WHERE user_id = $1',
+      [userId]
+    );
+
+    if (!existingStreak) {
+      // Create new streak
+      console.log('Creating new streak for user:', userId);
+      await query(
+        'INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity) VALUES ($1, 1, 1, $2)',
+        [userId, today]
+      );
+    } else {
+      const lastActivity = existingStreak.last_activity
+        ? new Date(existingStreak.last_activity).toISOString().split('T')[0]
+        : null;
+
+      console.log('Existing streak - lastActivity:', lastActivity);
+
+      if (lastActivity === today) {
+        // Already updated today, do nothing
+        console.log('Already updated today, skipping');
+        return;
+      }
+
+      let newStreak = 1;
+      if (lastActivity === yesterdayStr) {
+        newStreak = existingStreak.current_streak + 1;
+      }
+
+      const newBest = Math.max(newStreak, existingStreak.best_streak);
+
+      console.log('Updating streak - newStreak:', newStreak, 'newBest:', newBest);
+
+      await query(
+        'UPDATE AppChecklist_streaks SET current_streak = $1, best_streak = $2, last_activity = $3, updated_at = NOW() WHERE user_id = $4',
+        [newStreak, newBest, today, userId]
+      );
+    }
+
+    console.log('Streak update completed');
   } catch (error) {
     console.error('Error updating streak:', error);
+    // Don't rethrow - streak update failure shouldn't break task toggle
   }
 }
 
