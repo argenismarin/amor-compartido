@@ -220,7 +220,7 @@ export default function Home() {
         fetchTasks(false); // false = sin mostrar skeleton
         fetchAssignedByOther();
       }
-    }, 5000); // 5 segundos
+    }, 3000); // 3 segundos
 
     // Refrescar inmediatamente al volver a la pestaña
     const handleVisibilityChange = () => {
