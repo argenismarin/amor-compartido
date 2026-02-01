@@ -18,17 +18,18 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
       }
 
-      const newCompletedStatus = !task.is_completed;
-      console.log('Updating to completed:', newCompletedStatus);
+      // Convert to proper boolean - handle both SMALLINT (1/0) and BOOLEAN columns
+      const currentCompleted = task.is_completed === true || task.is_completed === 1 || task.is_completed === '1';
+      const newCompletedStatus = !currentCompleted;
+      console.log('Updating to completed:', newCompletedStatus, 'from:', task.is_completed);
 
-      // Use explicit string values for PostgreSQL boolean
       await query(
         `UPDATE AppChecklist_tasks
          SET is_completed = $1,
              completed_at = $2,
              updated_at = NOW()
          WHERE id = $3`,
-        [newCompletedStatus ? 'true' : 'false', newCompletedStatus ? new Date() : null, id]
+        [newCompletedStatus ? 1 : 0, newCompletedStatus ? new Date() : null, id]
       );
       console.log('Task updated successfully');
 
@@ -39,7 +40,7 @@ export async function PUT(request, { params }) {
         console.log('Streak updated');
       }
 
-      return NextResponse.json({ success: true, completed: newCompletedStatus });
+      return NextResponse.json({ success: true, completed: newCompletedStatus ? true : false });
     } else if (body.reaction !== undefined) {
       // Update reaction
       await query(
