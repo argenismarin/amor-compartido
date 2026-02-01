@@ -89,7 +89,7 @@ export async function PUT(request, { params }) {
 
     if (is_archived !== undefined) {
       updates.push(`is_archived = $${paramIndex}`);
-      values.push(is_archived ? 1 : 0);
+      values.push(!!is_archived);
       paramIndex++;
     }
 
@@ -118,9 +118,9 @@ export async function DELETE(request, { params }) {
     await ensureProjectsTable();
     const { id } = await params;
 
-    // Soft delete - archive the project (use 1 for SMALLINT compatibility)
+    // Soft delete - archive the project
     await query(
-      'UPDATE AppChecklist_projects SET is_archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      'UPDATE AppChecklist_projects SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
       [id]
     );
 

@@ -44,9 +44,9 @@ export async function GET(request) {
       LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id
     `;
 
-    // Filter out archived projects (is_archived can be SMALLINT or BOOLEAN depending on DB)
+    // Filter out archived projects
     if (!includeArchived) {
-      sql += ' WHERE COALESCE(p.is_archived, 0)::int = 0';
+      sql += ' WHERE p.is_archived IS NOT TRUE';
     }
 
     sql += ' GROUP BY p.id ORDER BY p.created_at DESC';
