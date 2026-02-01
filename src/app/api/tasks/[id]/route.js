@@ -23,7 +23,7 @@ export async function PUT(request, { params }) {
 
       await query(
         `UPDATE AppChecklist_tasks
-         SET is_completed = $1,
+         SET is_completed = $1::boolean,
              completed_at = $2,
              updated_at = NOW()
          WHERE id = $3`,
