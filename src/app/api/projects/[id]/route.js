@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
     const project = await queryOne(
       `SELECT p.*,
         COUNT(t.id) as total_tasks,
-        COUNT(CASE WHEN t.is_completed = true THEN 1 END) as completed_tasks
+        COUNT(CASE WHEN t.is_completed = 1 THEN 1 END) as completed_tasks
        FROM AppChecklist_projects p
        LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id
        WHERE p.id = $1
