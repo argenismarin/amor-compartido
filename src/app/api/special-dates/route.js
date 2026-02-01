@@ -1,6 +1,23 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
 
+// Zona horaria de Bogotá, Colombia (UTC-5)
+const TIMEZONE = 'America/Bogota';
+
+// Helper: Obtiene la fecha/hora actual en Bogotá
+const getBogotaDate = () => {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+};
+
+// Helper: Parsea una fecha de forma segura (evita problemas de zona horaria)
+const parseDateSafe = (dateStr) => {
+  if (!dateStr) return null;
+  const str = String(dateStr);
+  const datePart = str.split('T')[0];
+  const [year, month, day] = datePart.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0);
+};
+
 export async function GET() {
   try {
     await ensureDatabase();
@@ -16,8 +33,8 @@ export async function GET() {
     let mesiversarioInfo = null;
 
     if (anniversary?.date) {
-      const annivDate = new Date(anniversary.date);
-      const today = new Date();
+      const annivDate = parseDateSafe(anniversary.date);
+      const today = getBogotaDate();
 
       // Calculate total days together
       const daysTogether = Math.floor((today - annivDate) / (1000 * 60 * 60 * 24));
@@ -30,9 +47,9 @@ export async function GET() {
       const isMesiversario = annivDate.getDate() === today.getDate() && monthsTogether > 0;
 
       // Calculate days until next mesiversario
-      let nextMesiversario = new Date(today.getFullYear(), today.getMonth(), annivDate.getDate());
+      let nextMesiversario = new Date(today.getFullYear(), today.getMonth(), annivDate.getDate(), 12, 0, 0);
       if (nextMesiversario <= today) {
-        nextMesiversario = new Date(today.getFullYear(), today.getMonth() + 1, annivDate.getDate());
+        nextMesiversario = new Date(today.getFullYear(), today.getMonth() + 1, annivDate.getDate(), 12, 0, 0);
       }
       const daysUntilNext = Math.ceil((nextMesiversario - today) / (1000 * 60 * 60 * 24));
 

@@ -44,6 +44,49 @@ const MESIVERSARIO_MESSAGES = [
 // Emojis de corazones para las animaciones
 const HEART_EMOJIS = ['💕', '❤️', '💖', '💗', '💝', '💓', '💞', '🩷'];
 
+// Zona horaria de Bogotá, Colombia
+const TIMEZONE = 'America/Bogota';
+
+// Helper: Obtiene la fecha/hora actual en Bogotá
+const getBogotaDate = () => {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+};
+
+// Helper: Obtiene la fecha de hoy en formato YYYY-MM-DD (Bogotá)
+const getTodayString = () => {
+  const bogota = getBogotaDate();
+  return bogota.getFullYear() + '-' +
+    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
+    String(bogota.getDate()).padStart(2, '0');
+};
+
+// Helper: Parsea una fecha ISO/DATE evitando el problema de zona horaria
+// Para fechas tipo "2024-01-15" o "2024-01-15T00:00:00", extrae los componentes directamente
+const parseDateSafe = (dateStr) => {
+  if (!dateStr) return null;
+  const str = String(dateStr);
+  // Extraer solo la parte de fecha YYYY-MM-DD
+  const datePart = str.split('T')[0];
+  const [year, month, day] = datePart.split('-').map(Number);
+  // Crear fecha con hora al mediodía para evitar problemas de zona horaria
+  return new Date(year, month - 1, day, 12, 0, 0);
+};
+
+// Helper: Formatea una fecha para mostrar (sin hora)
+const formatDateDisplay = (dateStr, options = { day: 'numeric', month: 'short' }) => {
+  const date = parseDateSafe(dateStr);
+  if (!date) return '';
+  return date.toLocaleDateString('es-CO', options);
+};
+
+// Helper: Formatea una fecha con hora para mostrar
+const formatDateTimeDisplay = (dateStr, options = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) => {
+  if (!dateStr) return '';
+  // Para timestamps completos, usar zona horaria de Bogotá
+  const date = new Date(dateStr);
+  return date.toLocaleString('es-CO', { ...options, timeZone: TIMEZONE });
+};
+
 export default function Home() {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
@@ -1228,7 +1271,7 @@ export default function Home() {
                       <div className="project-stats-detail">
                         <span>{project.completed_tasks}/{project.total_tasks} tareas</span>
                         {project.due_date && (
-                          <span>📅 {new Date(project.due_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                          <span>📅 {formatDateDisplay(project.due_date)}</span>
                         )}
                       </div>
                     </div>
@@ -1415,7 +1458,7 @@ export default function Home() {
                   className="form-input"
                   value={formData.due_date}
                   onChange={e => setFormData({...formData, due_date: e.target.value})}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={getTodayString()}
                 />
               </div>
 
@@ -1590,7 +1633,7 @@ export default function Home() {
                   className="form-input"
                   value={projectFormData.due_date}
                   onChange={e => setProjectFormData({...projectFormData, due_date: e.target.value})}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={getTodayString()}
                 />
               </div>
 
@@ -1713,7 +1756,7 @@ export default function Home() {
                     <div className="achievement-desc">{achievement.description}</div>
                     {achievement.unlocked && (
                       <div className="achievement-date">
-                        Desbloqueado el {new Date(achievement.unlocked_at).toLocaleDateString('es-ES')}
+                        Desbloqueado el {formatDateDisplay(achievement.unlocked_at, { day: 'numeric', month: 'long', year: 'numeric' })}
                       </div>
                     )}
                   </div>
@@ -1770,12 +1813,7 @@ export default function Home() {
                       )}
                     </div>
                     <div className="history-item-meta">
-                      <span>✅ {new Date(task.completed_at).toLocaleDateString('es-ES', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}</span>
+                      <span>✅ {formatDateTimeDisplay(task.completed_at)}</span>
                       {task.reaction && <span className="history-item-reaction">{task.reaction}</span>}
                     </div>
                   </div>
@@ -1931,8 +1969,7 @@ function ProjectCard({ project, onSelect, onEdit, onDelete }) {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    return formatDateDisplay(dateStr);
   };
 
   return (
@@ -1991,8 +2028,7 @@ function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy
 
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    return formatDateDisplay(dateStr);
   };
 
   // Determine if assigned by Jenifer (pink) or Argenis (burgundy)

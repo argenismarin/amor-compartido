@@ -1,6 +1,31 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 
+// Zona horaria de Bogotá, Colombia (UTC-5)
+const TIMEZONE = 'America/Bogota';
+
+// Helper: Obtiene la fecha/hora actual en Bogotá
+const getBogotaDate = () => {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+};
+
+// Helper: Obtiene la fecha de hoy en formato YYYY-MM-DD (Bogotá)
+const getTodayBogota = () => {
+  const bogota = getBogotaDate();
+  return bogota.getFullYear() + '-' +
+    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
+    String(bogota.getDate()).padStart(2, '0');
+};
+
+// Helper: Obtiene la fecha de ayer en formato YYYY-MM-DD (Bogotá)
+const getYesterdayBogota = () => {
+  const bogota = getBogotaDate();
+  bogota.setDate(bogota.getDate() - 1);
+  return bogota.getFullYear() + '-' +
+    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
+    String(bogota.getDate()).padStart(2, '0');
+};
+
 export async function PUT(request, { params }) {
   try {
     const { id } = await params;
@@ -29,7 +54,7 @@ export async function PUT(request, { params }) {
              completed_at = $2,
              updated_at = NOW()
          WHERE id = $3`,
-        [newCompletedStatus ? 1 : 0, newCompletedStatus ? new Date() : null, id]
+        [newCompletedStatus ? 1 : 0, newCompletedStatus ? getBogotaDate() : null, id]
       );
       console.log('Task updated successfully');
 
@@ -70,10 +95,8 @@ export async function PUT(request, { params }) {
 
 async function updateStreak(userId) {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const today = getTodayBogota();
+    const yesterdayStr = getYesterdayBogota();
 
     console.log('updateStreak - userId:', userId, 'today:', today, 'yesterday:', yesterdayStr);
 
@@ -91,8 +114,9 @@ async function updateStreak(userId) {
         [userId, today]
       );
     } else {
+      // Extraer la fecha de last_activity de forma segura (sin problemas de zona horaria)
       const lastActivity = existingStreak.last_activity
-        ? new Date(existingStreak.last_activity).toISOString().split('T')[0]
+        ? String(existingStreak.last_activity).split('T')[0]
         : null;
 
       console.log('Existing streak - lastActivity:', lastActivity);

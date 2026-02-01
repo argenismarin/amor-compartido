@@ -1,6 +1,31 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
 
+// Zona horaria de Bogotá, Colombia (UTC-5)
+const TIMEZONE = 'America/Bogota';
+
+// Helper: Obtiene la fecha/hora actual en Bogotá
+const getBogotaDate = () => {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+};
+
+// Helper: Obtiene la fecha de hoy en formato YYYY-MM-DD (Bogotá)
+const getTodayBogota = () => {
+  const bogota = getBogotaDate();
+  return bogota.getFullYear() + '-' +
+    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
+    String(bogota.getDate()).padStart(2, '0');
+};
+
+// Helper: Obtiene la fecha de ayer en formato YYYY-MM-DD (Bogotá)
+const getYesterdayBogota = () => {
+  const bogota = getBogotaDate();
+  bogota.setDate(bogota.getDate() - 1);
+  return bogota.getFullYear() + '-' +
+    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
+    String(bogota.getDate()).padStart(2, '0');
+};
+
 export async function GET(request) {
   try {
     await ensureDatabase();
@@ -25,14 +50,12 @@ export async function GET(request) {
     }
 
     // Check if streak should be reset (no activity yesterday)
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = getTodayBogota();
+    const yesterdayStr = getYesterdayBogota();
 
+    // Extraer la fecha de last_activity de forma segura (sin problemas de zona horaria)
     const lastActivity = streak.last_activity
-      ? new Date(streak.last_activity).toISOString().split('T')[0]
+      ? String(streak.last_activity).split('T')[0]
       : null;
 
     // If last activity was not today or yesterday, streak is broken
