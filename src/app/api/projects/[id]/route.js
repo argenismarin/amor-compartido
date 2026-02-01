@@ -1,9 +1,27 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
 
+// Ensure projects table exists
+async function ensureProjectsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_projects (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      emoji VARCHAR(10) DEFAULT '📁',
+      color VARCHAR(20) DEFAULT '#6366f1',
+      due_date DATE NULL,
+      is_archived BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
 export async function GET(request, { params }) {
   try {
     await ensureDatabase();
+    await ensureProjectsTable();
     const { id } = await params;
 
     const project = await queryOne(
@@ -31,6 +49,7 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     await ensureDatabase();
+    await ensureProjectsTable();
     const { id } = await params;
     const { name, description, emoji, color, due_date, is_archived } = await request.json();
 
@@ -96,6 +115,7 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     await ensureDatabase();
+    await ensureProjectsTable();
     const { id } = await params;
 
     // Soft delete - archive the project

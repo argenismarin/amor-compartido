@@ -1,9 +1,38 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
 
+// Ensure projects table exists
+async function ensureProjectsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_projects (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      emoji VARCHAR(10) DEFAULT '📁',
+      color VARCHAR(20) DEFAULT '#6366f1',
+      due_date DATE NULL,
+      is_archived BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Also ensure project_id column exists in tasks
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'project_id') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN project_id INT NULL;
+      END IF;
+    END $$;
+  `);
+}
+
 export async function GET(request) {
   try {
     await ensureDatabase();
+    await ensureProjectsTable();
     const { searchParams } = new URL(request.url);
     const includeArchived = searchParams.get('includeArchived') === 'true';
 
@@ -32,6 +61,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     await ensureDatabase();
+    await ensureProjectsTable();
     const { name, description, emoji, color, due_date } = await request.json();
 
     if (!name || name.trim() === '') {
