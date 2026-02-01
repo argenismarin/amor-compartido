@@ -1501,7 +1501,7 @@ function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy
   const isToggling = togglingTaskId === task.id;
 
   // Can react if: task is completed AND was assigned by current user to the other person
-  const canReact = task.is_completed && task.assigned_by === currentUserId && task.assigned_to !== currentUserId;
+  const canReact = !!task.is_completed && task.assigned_by === currentUserId && task.assigned_to !== currentUserId;
 
   return (
     <div className={`task-card ${task.is_completed ? 'completed' : ''} priority-${task.priority} ${fromClass}`}>
