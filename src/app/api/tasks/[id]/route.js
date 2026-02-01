@@ -9,6 +9,11 @@ export async function PUT(request, { params }) {
     if (body.toggle_complete !== undefined) {
       // Toggle completion status
       const task = await queryOne('SELECT * FROM AppChecklist_tasks WHERE id = $1', [id]);
+
+      if (!task) {
+        return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+      }
+
       const newCompletedStatus = !task.is_completed;
 
       await query(
@@ -61,20 +66,21 @@ async function updateStreak(userId) {
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
     // Single UPSERT query with CASE logic to handle all scenarios
+    // COALESCE handles NULL last_activity by treating it as a new streak
     await query(`
       INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity, updated_at)
       VALUES ($1, 1, 1, $2, NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         current_streak = CASE
-          WHEN AppChecklist_streaks.last_activity::date = $2::date THEN AppChecklist_streaks.current_streak
-          WHEN AppChecklist_streaks.last_activity::date = $3::date THEN AppChecklist_streaks.current_streak + 1
+          WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $2::date THEN AppChecklist_streaks.current_streak
+          WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $3::date THEN AppChecklist_streaks.current_streak + 1
           ELSE 1
         END,
         best_streak = GREATEST(
           AppChecklist_streaks.best_streak,
           CASE
-            WHEN AppChecklist_streaks.last_activity::date = $2::date THEN AppChecklist_streaks.current_streak
-            WHEN AppChecklist_streaks.last_activity::date = $3::date THEN AppChecklist_streaks.current_streak + 1
+            WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $2::date THEN AppChecklist_streaks.current_streak
+            WHEN COALESCE(AppChecklist_streaks.last_activity::date, '1900-01-01'::date) = $3::date THEN AppChecklist_streaks.current_streak + 1
             ELSE 1
           END
         ),
