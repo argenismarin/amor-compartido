@@ -45,7 +45,7 @@ export async function GET(request) {
     `;
 
     if (!includeArchived) {
-      sql += ' WHERE p.is_archived = false';
+      sql += ' WHERE (p.is_archived = false OR p.is_archived = 0 OR p.is_archived IS NULL)';
     }
 
     sql += ' GROUP BY p.id ORDER BY p.created_at DESC';
