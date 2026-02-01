@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { query, initDatabase } from '@/lib/db';
+import { query, ensureDatabase } from '@/lib/db';
 
 export async function GET() {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const categories = await query('SELECT * FROM AppChecklist_categories ORDER BY id');
     return NextResponse.json(categories);
   } catch (error) {

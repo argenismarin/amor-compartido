@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne, initDatabase } from '@/lib/db';
+import { query, queryOne, ensureDatabase } from '@/lib/db';
 
 export async function GET(request) {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
@@ -51,28 +51,89 @@ export async function POST(request) {
 
 async function checkAndUnlockAchievements(userId) {
   const newAchievements = [];
+  const today = new Date().toISOString().split('T')[0];
+  const todayDate = new Date();
 
-  // Get user's stats
-  const completedCount = await queryOne(
-    'SELECT COUNT(*) as count FROM AppChecklist_tasks WHERE assigned_to = $1 AND is_completed = true',
-    [userId]
-  );
+  // Single optimized CTE query to get all user stats at once
+  const statsResult = await queryOne(`
+    WITH user_stats AS (
+      SELECT
+        COUNT(*) FILTER (WHERE assigned_to = $1 AND is_completed = true) as tasks_completed,
+        COUNT(*) FILTER (WHERE assigned_by = $1 AND reaction IS NOT NULL) as reactions_given,
+        COUNT(DISTINCT category_id) FILTER (WHERE assigned_to = $1 AND category_id IS NOT NULL) as categories_used,
+        COUNT(*) FILTER (WHERE assigned_to = $1 AND is_completed = true
+          AND EXTRACT(MONTH FROM completed_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+          AND EXTRACT(YEAR FROM completed_at) = EXTRACT(YEAR FROM CURRENT_DATE)) as monthly_tasks,
+        COUNT(*) FILTER (WHERE assigned_to = $1 AND is_completed = true
+          AND EXTRACT(DOW FROM completed_at) IN (0, 6)
+          AND completed_at >= CURRENT_DATE - INTERVAL '7 days') as weekend_tasks,
+        EXISTS (SELECT 1 FROM AppChecklist_tasks WHERE assigned_to = $1 AND is_completed = true
+          AND EXTRACT(HOUR FROM completed_at) < 8) as early_bird,
+        EXISTS (SELECT 1 FROM AppChecklist_tasks WHERE assigned_to = $1 AND is_completed = true
+          AND EXTRACT(HOUR FROM completed_at) >= 22) as night_owl
+      FROM AppChecklist_tasks
+    ),
+    streak_stats AS (
+      SELECT COALESCE(current_streak, 0) as current_streak, COALESCE(best_streak, 0) as best_streak
+      FROM AppChecklist_streaks WHERE user_id = $1
+    ),
+    team_day AS (
+      SELECT COUNT(DISTINCT assigned_to) as users_completed_today
+      FROM AppChecklist_tasks
+      WHERE is_completed = true AND DATE(completed_at) = $2
+    ),
+    special_dates AS (
+      SELECT date FROM AppChecklist_special_dates WHERE type = 'anniversary' LIMIT 1
+    ),
+    app_usage AS (
+      SELECT first_use FROM AppChecklist_app_usage ORDER BY id LIMIT 1
+    )
+    SELECT
+      us.tasks_completed, us.reactions_given, us.categories_used, us.monthly_tasks,
+      us.weekend_tasks, us.early_bird, us.night_owl,
+      COALESCE(ss.current_streak, 0) as current_streak,
+      COALESCE(ss.best_streak, 0) as best_streak,
+      COALESCE(td.users_completed_today, 0) as users_completed_today,
+      sd.date as anniversary_date,
+      au.first_use
+    FROM user_stats us
+    LEFT JOIN streak_stats ss ON true
+    LEFT JOIN team_day td ON true
+    LEFT JOIN special_dates sd ON true
+    LEFT JOIN app_usage au ON true
+  `, [userId, today]);
 
-  const streak = await queryOne(
-    'SELECT current_streak, best_streak FROM AppChecklist_streaks WHERE user_id = $1',
-    [userId]
-  );
-
-  // Get already unlocked achievement IDs
-  const unlockedIds = await query(
-    'SELECT achievement_id FROM AppChecklist_user_achievements WHERE user_id = $1',
-    [userId]
-  );
+  // Get already unlocked achievement IDs and all achievements in one query
+  const [unlockedIds, achievements] = await Promise.all([
+    query('SELECT achievement_id FROM AppChecklist_user_achievements WHERE user_id = $1', [userId]),
+    query('SELECT * FROM AppChecklist_achievements')
+  ]);
   const unlockedSet = new Set(unlockedIds.map(u => u.achievement_id));
 
-  // Get all achievements
-  const achievements = await query('SELECT * FROM AppChecklist_achievements');
+  // Calculate anniversary-based conditions
+  let isMesiversario = false;
+  let isAniversario = false;
+  let appMonths = 0;
 
+  if (statsResult?.anniversary_date) {
+    const annivDate = new Date(statsResult.anniversary_date);
+    if (annivDate.getDate() === todayDate.getDate()) {
+      const monthsDiff = (todayDate.getFullYear() - annivDate.getFullYear()) * 12 +
+                        (todayDate.getMonth() - annivDate.getMonth());
+      isMesiversario = monthsDiff >= 1;
+      isAniversario = annivDate.getMonth() === todayDate.getMonth() &&
+                     todayDate.getFullYear() > annivDate.getFullYear();
+    }
+  }
+
+  if (statsResult?.first_use) {
+    const firstUse = new Date(statsResult.first_use);
+    appMonths = (todayDate.getFullYear() - firstUse.getFullYear()) * 12 +
+               (todayDate.getMonth() - firstUse.getMonth());
+  }
+
+  // Check achievements in memory (no additional queries)
+  const achievementsToUnlock = [];
   for (const achievement of achievements) {
     if (unlockedSet.has(achievement.id)) continue;
 
@@ -80,138 +141,58 @@ async function checkAndUnlockAchievements(userId) {
 
     switch (achievement.condition_type) {
       case 'tasks_completed':
-        shouldUnlock = parseInt(completedCount?.count || 0) >= achievement.condition_value;
+        shouldUnlock = parseInt(statsResult?.tasks_completed || 0) >= achievement.condition_value;
         break;
       case 'streak_days':
-        shouldUnlock = (streak?.current_streak || 0) >= achievement.condition_value ||
-                       (streak?.best_streak || 0) >= achievement.condition_value;
+        shouldUnlock = (statsResult?.current_streak || 0) >= achievement.condition_value ||
+                       (statsResult?.best_streak || 0) >= achievement.condition_value;
         break;
       case 'team_day':
-        // Check if both users completed tasks today
-        const today = new Date().toISOString().split('T')[0];
-        const todayCompletions = await query(
-          `SELECT DISTINCT assigned_to FROM AppChecklist_tasks
-           WHERE is_completed = true AND DATE(completed_at) = $1`,
-          [today]
-        );
-        shouldUnlock = todayCompletions.length >= 2;
+        shouldUnlock = (statsResult?.users_completed_today || 0) >= 2;
         break;
       case 'early_bird':
-        // Check if completed before 8am
-        const earlyBird = await queryOne(
-          `SELECT id FROM AppChecklist_tasks
-           WHERE assigned_to = $1 AND is_completed = true
-           AND EXTRACT(HOUR FROM completed_at) < 8
-           LIMIT 1`,
-          [userId]
-        );
-        shouldUnlock = !!earlyBird;
+        shouldUnlock = statsResult?.early_bird === true;
         break;
       case 'night_owl':
-        // Check if completed after 10pm
-        const nightOwl = await queryOne(
-          `SELECT id FROM AppChecklist_tasks
-           WHERE assigned_to = $1 AND is_completed = true
-           AND EXTRACT(HOUR FROM completed_at) >= 22
-           LIMIT 1`,
-          [userId]
-        );
-        shouldUnlock = !!nightOwl;
+        shouldUnlock = statsResult?.night_owl === true;
         break;
       case 'weekend_tasks':
-        // Check tasks completed on weekends (Saturday=6, Sunday=0)
-        const weekendTasks = await queryOne(
-          `SELECT COUNT(*) as count FROM AppChecklist_tasks
-           WHERE assigned_to = $1 AND is_completed = true
-           AND EXTRACT(DOW FROM completed_at) IN (0, 6)
-           AND completed_at >= CURRENT_DATE - INTERVAL '7 days'`,
-          [userId]
-        );
-        shouldUnlock = parseInt(weekendTasks?.count || 0) >= achievement.condition_value;
+        shouldUnlock = parseInt(statsResult?.weekend_tasks || 0) >= achievement.condition_value;
         break;
       case 'reactions_given':
-        // Count reactions given by this user (tasks they assigned that have reactions)
-        const reactionsGiven = await queryOne(
-          `SELECT COUNT(*) as count FROM AppChecklist_tasks
-           WHERE assigned_by = $1 AND reaction IS NOT NULL`,
-          [userId]
-        );
-        shouldUnlock = parseInt(reactionsGiven?.count || 0) >= achievement.condition_value;
+        shouldUnlock = parseInt(statsResult?.reactions_given || 0) >= achievement.condition_value;
         break;
       case 'categories_used':
-        // Check how many different categories the user has used
-        const categoriesUsed = await queryOne(
-          `SELECT COUNT(DISTINCT category_id) as count FROM AppChecklist_tasks
-           WHERE assigned_to = $1 AND category_id IS NOT NULL`,
-          [userId]
-        );
-        shouldUnlock = parseInt(categoriesUsed?.count || 0) >= achievement.condition_value;
+        shouldUnlock = parseInt(statsResult?.categories_used || 0) >= achievement.condition_value;
         break;
       case 'monthly_tasks':
-        // Check tasks completed this month
-        const monthlyTasks = await queryOne(
-          `SELECT COUNT(*) as count FROM AppChecklist_tasks
-           WHERE assigned_to = $1 AND is_completed = true
-           AND EXTRACT(MONTH FROM completed_at) = EXTRACT(MONTH FROM CURRENT_DATE)
-           AND EXTRACT(YEAR FROM completed_at) = EXTRACT(YEAR FROM CURRENT_DATE)`,
-          [userId]
-        );
-        shouldUnlock = parseInt(monthlyTasks?.count || 0) >= achievement.condition_value;
+        shouldUnlock = parseInt(statsResult?.monthly_tasks || 0) >= achievement.condition_value;
         break;
       case 'mesiversario':
-        // Check if today is a mesiversario (monthly anniversary)
-        const anniversary = await queryOne(
-          `SELECT date FROM AppChecklist_special_dates WHERE type = 'anniversary'`
-        );
-        if (anniversary?.date) {
-          const annivDate = new Date(anniversary.date);
-          const today2 = new Date();
-          // If today's day matches anniversary day and at least 1 month has passed
-          if (annivDate.getDate() === today2.getDate()) {
-            const monthsDiff = (today2.getFullYear() - annivDate.getFullYear()) * 12 +
-                              (today2.getMonth() - annivDate.getMonth());
-            shouldUnlock = monthsDiff >= 1;
-          }
-        }
+        shouldUnlock = isMesiversario;
         break;
       case 'aniversario':
-        // Check if today is the anniversary (same month and day, at least 1 year)
-        const anniv = await queryOne(
-          `SELECT date FROM AppChecklist_special_dates WHERE type = 'anniversary'`
-        );
-        if (anniv?.date) {
-          const annivDate2 = new Date(anniv.date);
-          const today3 = new Date();
-          if (annivDate2.getDate() === today3.getDate() &&
-              annivDate2.getMonth() === today3.getMonth() &&
-              today3.getFullYear() > annivDate2.getFullYear()) {
-            shouldUnlock = true;
-          }
-        }
+        shouldUnlock = isAniversario;
         break;
       case 'app_months':
-        // Check how many months the app has been used
-        const appUsage = await queryOne(
-          `SELECT first_use FROM AppChecklist_app_usage ORDER BY id LIMIT 1`
-        );
-        if (appUsage?.first_use) {
-          const firstUse = new Date(appUsage.first_use);
-          const today4 = new Date();
-          const monthsUsed = (today4.getFullYear() - firstUse.getFullYear()) * 12 +
-                            (today4.getMonth() - firstUse.getMonth());
-          shouldUnlock = monthsUsed >= achievement.condition_value;
-        }
+        shouldUnlock = appMonths >= achievement.condition_value;
         break;
     }
 
     if (shouldUnlock) {
-      await query(
-        'INSERT INTO AppChecklist_user_achievements (user_id, achievement_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [userId, achievement.id]
-      );
-      newAchievements.push(achievement);
+      achievementsToUnlock.push(achievement);
     }
   }
 
-  return newAchievements;
+  // Batch insert all new achievements
+  if (achievementsToUnlock.length > 0) {
+    const values = achievementsToUnlock.map((_, i) => `($1, $${i + 2})`).join(', ');
+    const params = [userId, ...achievementsToUnlock.map(a => a.id)];
+    await query(
+      `INSERT INTO AppChecklist_user_achievements (user_id, achievement_id) VALUES ${values} ON CONFLICT DO NOTHING`,
+      params
+    );
+  }
+
+  return achievementsToUnlock;
 }

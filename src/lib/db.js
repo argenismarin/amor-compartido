@@ -15,6 +15,15 @@ export async function queryOne(sql, params = []) {
   return result.rows[0];
 }
 
+// Singleton flag to ensure initDatabase runs only once per server instance
+let isInitialized = false;
+
+export async function ensureDatabase() {
+  if (isInitialized) return;
+  await initDatabase();
+  isInitialized = true;
+}
+
 export async function initDatabase() {
   // Create users table
   await query(`
@@ -234,6 +243,16 @@ export async function initDatabase() {
   if (existingUsage.length === 0) {
     await query('INSERT INTO AppChecklist_app_usage (first_use) VALUES (CURRENT_DATE)');
   }
+
+  // Create indexes for optimized queries
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON AppChecklist_tasks(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_tasks_assigned_by ON AppChecklist_tasks(assigned_by);
+    CREATE INDEX IF NOT EXISTS idx_tasks_completed_user ON AppChecklist_tasks(is_completed, assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON AppChecklist_tasks(completed_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_streaks_user ON AppChecklist_streaks(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_achievements ON AppChecklist_user_achievements(user_id);
+  `);
 }
 
 export default pool;

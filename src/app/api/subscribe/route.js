@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne, initDatabase } from '@/lib/db';
+import { query, queryOne, ensureDatabase } from '@/lib/db';
 
 export async function POST(request) {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const { userId, subscription } = await request.json();
 
     if (!userId || !subscription) {
@@ -63,7 +63,7 @@ export async function DELETE(request) {
 
 export async function GET(request) {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne, initDatabase } from '@/lib/db';
+import { query, queryOne, ensureDatabase } from '@/lib/db';
 
 export async function GET(request) {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 

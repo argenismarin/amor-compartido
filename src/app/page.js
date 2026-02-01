@@ -64,6 +64,7 @@ export default function Home() {
   // Loading states
   const [isSaving, setIsSaving] = useState(false);
   const [togglingTaskId, setTogglingTaskId] = useState(null);
+  const [tasksLoading, setTasksLoading] = useState(true);
 
   // Celebration states
   const [floatingHearts, setFloatingHearts] = useState([]);
@@ -202,7 +203,7 @@ export default function Home() {
   // Fetch tasks when user changes
   useEffect(() => {
     if (currentUser) {
-      fetchTasks();
+      fetchTasks(true); // Show skeleton on initial load / tab change
       fetchAssignedByOther();
       fetchStreak();
       fetchAchievements();
@@ -253,7 +254,8 @@ export default function Home() {
     }
   };
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (showSkeleton = false) => {
+    if (showSkeleton) setTasksLoading(true);
     try {
       let url = '/api/tasks';
       const params = new URLSearchParams();
@@ -277,6 +279,8 @@ export default function Home() {
     } catch (error) {
       console.error('Error fetching tasks:', error);
       showToast('Error al cargar tareas', 'error');
+    } finally {
+      setTasksLoading(false);
     }
   };
 
@@ -387,6 +391,28 @@ export default function Home() {
   const handleTaskToggle = async (task) => {
     setTogglingTaskId(task.id);
     const wasCompleted = task.is_completed;
+    const newCompletedStatus = !wasCompleted;
+
+    // Optimistic update - update UI immediately
+    const updateTaskInList = (list) => list.map(t =>
+      t.id === task.id
+        ? { ...t, is_completed: newCompletedStatus, completed_at: newCompletedStatus ? new Date().toISOString() : null }
+        : t
+    );
+
+    const previousTasks = tasks;
+    const previousAssignedByOther = assignedByOther;
+
+    setTasks(updateTaskInList);
+    setAssignedByOther(updateTaskInList);
+
+    // Celebrate immediately when marking as complete
+    if (newCompletedStatus) {
+      triggerFloatingHearts();
+      showToast(getRandomMessage());
+    } else {
+      showToast('Tarea marcada como pendiente');
+    }
 
     try {
       await fetch(`/api/tasks/${task.id}`, {
@@ -395,23 +421,16 @@ export default function Home() {
         body: JSON.stringify({ toggle_complete: true })
       });
 
-      // Fetch updated tasks
-      await fetchTasks();
-      await fetchAssignedByOther();
-
-      // Only celebrate when marking as complete (not when unmarking)
-      if (!wasCompleted) {
-        triggerFloatingHearts();
-        showToast(getRandomMessage());
-        // Check for new achievements after completing a task
+      // Check for new achievements after completing a task (background)
+      if (newCompletedStatus) {
         setTimeout(() => checkNewAchievements(), 500);
-        // Refresh streak
         fetchStreak();
-      } else {
-        showToast('Tarea marcada como pendiente');
       }
     } catch (error) {
+      // Rollback on error
       console.error('Error toggling task:', error);
+      setTasks(previousTasks);
+      setAssignedByOther(previousAssignedByOther);
       showToast('Error al actualizar la tarea', 'error');
     } finally {
       setTogglingTaskId(null);
@@ -419,17 +438,29 @@ export default function Home() {
   };
 
   const handleReaction = async (taskId, emoji) => {
+    // Optimistic update
+    const updateTaskInList = (list) => list.map(t =>
+      t.id === taskId ? { ...t, reaction: emoji } : t
+    );
+
+    const previousTasks = tasks;
+    const previousAssignedByOther = assignedByOther;
+
+    setTasks(updateTaskInList);
+    setAssignedByOther(updateTaskInList);
+    showToast('Reaccion enviada 💕');
+
     try {
       await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reaction: emoji })
       });
-      fetchTasks();
-      fetchAssignedByOther();
-      showToast('Reaccion enviada 💕');
     } catch (error) {
+      // Rollback on error
       console.error('Error adding reaction:', error);
+      setTasks(previousTasks);
+      setAssignedByOther(previousAssignedByOther);
       showToast('Error al enviar reaccion', 'error');
     }
   };
@@ -535,13 +566,24 @@ export default function Home() {
       message: '¿Eliminar esta tarea?',
       onConfirm: async () => {
         setConfirmDialog(null);
+
+        // Save task for potential rollback
+        const deletedTask = tasks.find(t => t.id === taskId) || assignedByOther.find(t => t.id === taskId);
+        const previousTasks = tasks;
+        const previousAssignedByOther = assignedByOther;
+
+        // Optimistic update - remove from lists immediately
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+        setAssignedByOther(prev => prev.filter(t => t.id !== taskId));
+        showToast('Tarea eliminada');
+
         try {
           await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-          fetchTasks();
-          fetchAssignedByOther();
-          showToast('Tarea eliminada');
         } catch (error) {
+          // Rollback on error
           console.error('Error deleting task:', error);
+          setTasks(previousTasks);
+          setAssignedByOther(previousAssignedByOther);
           showToast('Error al eliminar la tarea', 'error');
         }
       },
@@ -552,11 +594,61 @@ export default function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-    try {
-      const method = editingTask ? 'PUT' : 'POST';
-      const url = editingTask ? `/api/tasks/${editingTask.id}` : '/api/tasks';
 
-      await fetch(url, {
+    const isEditing = !!editingTask;
+    const method = isEditing ? 'PUT' : 'POST';
+    const url = isEditing ? `/api/tasks/${editingTask.id}` : '/api/tasks';
+
+    // Get category info for optimistic task
+    const categoryInfo = categories.find(c => c.id === formData.category_id);
+    const assignedToUser = users.find(u => u.id === formData.assigned_to);
+    const assignedByUser = currentUser;
+
+    // Create optimistic task object
+    const optimisticTask = {
+      id: isEditing ? editingTask.id : `temp-${Date.now()}`,
+      ...formData,
+      assigned_by: currentUser.id,
+      is_completed: isEditing ? editingTask.is_completed : false,
+      completed_at: isEditing ? editingTask.completed_at : null,
+      created_at: isEditing ? editingTask.created_at : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      assigned_to_name: assignedToUser?.name,
+      assigned_to_avatar: assignedToUser?.avatar_emoji,
+      assigned_by_name: assignedByUser?.name,
+      assigned_by_avatar: assignedByUser?.avatar_emoji,
+      category_name: categoryInfo?.name,
+      category_emoji: categoryInfo?.emoji,
+      category_color: categoryInfo?.color
+    };
+
+    // Save previous state for rollback
+    const previousTasks = tasks;
+    const previousAssignedByOther = assignedByOther;
+
+    // Optimistic update
+    if (isEditing) {
+      setTasks(prev => prev.map(t => t.id === editingTask.id ? optimisticTask : t));
+      setAssignedByOther(prev => prev.map(t => t.id === editingTask.id ? optimisticTask : t));
+    } else {
+      // Add to appropriate list based on who it's assigned to
+      if (formData.assigned_to === currentUser.id) {
+        setTasks(prev => [optimisticTask, ...prev]);
+      } else {
+        // Task assigned to other user by current user - it would appear in "Para [Partner]" tab
+        if (activeTab === 'assignedToOther') {
+          setTasks(prev => [optimisticTask, ...prev]);
+        }
+      }
+    }
+
+    setShowModal(false);
+    setEditingTask(null);
+    setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, recurrence: null });
+    showToast(isEditing ? 'Tarea actualizada' : 'Tarea creada 💕');
+
+    try {
+      const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -565,14 +657,19 @@ export default function Home() {
         })
       });
 
-      setShowModal(false);
-      setEditingTask(null);
-      setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, recurrence: null });
-      fetchTasks();
-      fetchAssignedByOther();
-      showToast(editingTask ? 'Tarea actualizada' : 'Tarea creada 💕');
+      const result = await response.json();
+
+      // Replace temp ID with real ID for new tasks
+      if (!isEditing && result.id) {
+        setTasks(prev => prev.map(t =>
+          t.id === optimisticTask.id ? { ...t, id: result.id } : t
+        ));
+      }
     } catch (error) {
+      // Rollback on error
       console.error('Error saving task:', error);
+      setTasks(previousTasks);
+      setAssignedByOther(previousAssignedByOther);
       showToast('Error al guardar la tarea', 'error');
     } finally {
       setIsSaving(false);
@@ -841,7 +938,14 @@ export default function Home() {
 
         {/* Task List */}
         <div className="task-list">
-          {tasks.length === 0 ? (
+          {tasksLoading ? (
+            // Show skeleton loaders while loading
+            <>
+              <TaskCardSkeleton />
+              <TaskCardSkeleton />
+              <TaskCardSkeleton />
+            </>
+          ) : tasks.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">💕</div>
               <div className="empty-state-title">No hay tareas aún</div>
@@ -1307,6 +1411,29 @@ export default function Home() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// TaskCardSkeleton Component - Loading placeholder
+function TaskCardSkeleton() {
+  return (
+    <div className="task-card-skeleton">
+      <div className="skeleton-header">
+        <div className="skeleton skeleton-checkbox"></div>
+        <div className="skeleton-content">
+          <div className="skeleton skeleton-title"></div>
+          <div className="skeleton skeleton-description"></div>
+          <div className="skeleton-meta">
+            <div className="skeleton skeleton-meta-item"></div>
+            <div className="skeleton skeleton-meta-item"></div>
+          </div>
+        </div>
+        <div className="skeleton-actions">
+          <div className="skeleton skeleton-action-btn"></div>
+          <div className="skeleton skeleton-action-btn"></div>
+        </div>
+      </div>
     </div>
   );
 }

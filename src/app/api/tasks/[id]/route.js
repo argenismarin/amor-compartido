@@ -56,36 +56,31 @@ export async function PUT(request, { params }) {
 async function updateStreak(userId) {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const streak = await queryOne('SELECT * FROM AppChecklist_streaks WHERE user_id = $1', [userId]);
-
-    if (!streak) {
-      await query('INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity) VALUES ($1, 1, 1, $2)', [userId, today]);
-      return;
-    }
-
-    const lastActivity = streak.last_activity ? new Date(streak.last_activity).toISOString().split('T')[0] : null;
-
-    if (lastActivity === today) {
-      // Already updated today
-      return;
-    }
-
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    let newStreak = 1;
-    if (lastActivity === yesterdayStr) {
-      // Continue streak
-      newStreak = streak.current_streak + 1;
-    }
-
-    const newBest = Math.max(newStreak, streak.best_streak);
-
-    await query(
-      'UPDATE AppChecklist_streaks SET current_streak = $1, best_streak = $2, last_activity = $3, updated_at = NOW() WHERE user_id = $4',
-      [newStreak, newBest, today, userId]
-    );
+    // Single UPSERT query with CASE logic to handle all scenarios
+    await query(`
+      INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity, updated_at)
+      VALUES ($1, 1, 1, $2, NOW())
+      ON CONFLICT (user_id) DO UPDATE SET
+        current_streak = CASE
+          WHEN AppChecklist_streaks.last_activity::date = $2::date THEN AppChecklist_streaks.current_streak
+          WHEN AppChecklist_streaks.last_activity::date = $3::date THEN AppChecklist_streaks.current_streak + 1
+          ELSE 1
+        END,
+        best_streak = GREATEST(
+          AppChecklist_streaks.best_streak,
+          CASE
+            WHEN AppChecklist_streaks.last_activity::date = $2::date THEN AppChecklist_streaks.current_streak
+            WHEN AppChecklist_streaks.last_activity::date = $3::date THEN AppChecklist_streaks.current_streak + 1
+            ELSE 1
+          END
+        ),
+        last_activity = $2,
+        updated_at = NOW()
+    `, [userId, today, yesterdayStr]);
   } catch (error) {
     console.error('Error updating streak:', error);
   }

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne, initDatabase } from '@/lib/db';
+import { query, queryOne, ensureDatabase } from '@/lib/db';
 
 export async function GET() {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const dates = await query(`
       SELECT sd.*, u.name as user_name
       FROM AppChecklist_special_dates sd
@@ -62,7 +62,7 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const { type, date, user_id, label } = await request.json();
 
     if (!type || !date) {

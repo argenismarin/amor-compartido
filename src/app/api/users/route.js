@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { query, initDatabase } from '@/lib/db';
+import { query, ensureDatabase } from '@/lib/db';
 
 export async function GET() {
   try {
-    await initDatabase();
+    await ensureDatabase();
     const users = await query('SELECT * FROM AppChecklist_users ORDER BY id');
     return NextResponse.json(users);
   } catch (error) {

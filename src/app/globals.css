@@ -2492,3 +2492,89 @@ body {
     color: var(--burgundy-light);
   }
 }
+
+/* ============================================
+   SKELETON LOADERS
+   ============================================ */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.task-card-skeleton {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  border-left: 4px solid var(--border);
+}
+
+.task-card-skeleton .skeleton-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.task-card-skeleton .skeleton-checkbox {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.task-card-skeleton .skeleton-content {
+  flex: 1;
+}
+
+.task-card-skeleton .skeleton-title {
+  height: 18px;
+  width: 70%;
+  margin-bottom: 8px;
+}
+
+.task-card-skeleton .skeleton-description {
+  height: 14px;
+  width: 90%;
+  margin-bottom: 12px;
+}
+
+.task-card-skeleton .skeleton-meta {
+  display: flex;
+  gap: 12px;
+}
+
+.task-card-skeleton .skeleton-meta-item {
+  height: 12px;
+  width: 60px;
+}
+
+.task-card-skeleton .skeleton-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.task-card-skeleton .skeleton-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+/* Dark mode skeleton */
+@media (prefers-color-scheme: dark) {
+  .skeleton {
+    background: linear-gradient(90deg, #333 25%, #404040 50%, #333 75%);
+    background-size: 200% 100%;
+  }
+
+  .task-card-skeleton {
+    background: var(--surface);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+}
