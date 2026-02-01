@@ -405,10 +405,13 @@ export default function Home() {
   };
 
   const fetchAchievements = async () => {
+    if (!currentUser?.id) return;
     try {
       const res = await fetch(`/api/achievements?userId=${currentUser.id}`);
       const data = await res.json();
-      setAchievements(data);
+      if (Array.isArray(data)) {
+        setAchievements(data);
+      }
     } catch (error) {
       console.error('Error fetching achievements:', error);
     }
@@ -453,6 +456,7 @@ export default function Home() {
   };
 
   const checkNewAchievements = async () => {
+    if (!currentUser?.id) return;
     try {
       const res = await fetch('/api/achievements', {
         method: 'POST',
