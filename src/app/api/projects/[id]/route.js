@@ -11,7 +11,7 @@ async function ensureProjectsTable() {
       emoji VARCHAR(10) DEFAULT '📁',
       color VARCHAR(20) DEFAULT '#6366f1',
       due_date DATE NULL,
-      is_archived BOOLEAN DEFAULT FALSE,
+      is_archived SMALLINT DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )

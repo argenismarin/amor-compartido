@@ -11,7 +11,7 @@ async function ensureProjectsTable() {
       emoji VARCHAR(10) DEFAULT '📁',
       color VARCHAR(20) DEFAULT '#6366f1',
       due_date DATE NULL,
-      is_archived BOOLEAN DEFAULT FALSE,
+      is_archived SMALLINT DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -45,7 +45,7 @@ export async function GET(request) {
     `;
 
     if (!includeArchived) {
-      sql += ' WHERE (p.is_archived = false OR p.is_archived = 0 OR p.is_archived IS NULL)';
+      sql += ' WHERE (p.is_archived = 0 OR p.is_archived IS NULL)';
     }
 
     sql += ' GROUP BY p.id ORDER BY p.created_at DESC';
