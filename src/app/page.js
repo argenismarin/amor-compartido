@@ -365,9 +365,10 @@ export default function Home() {
     try {
       const res = await fetch('/api/projects');
       const data = await res.json();
-      setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching projects:', error);
+      setProjects([]);
     }
   };
 
@@ -375,9 +376,10 @@ export default function Home() {
     try {
       const res = await fetch(`/api/tasks?projectId=${projectId}`);
       const data = await res.json();
-      setProjectTasks(data);
+      setProjectTasks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching project tasks:', error);
+      setProjectTasks([]);
     }
   };
 
@@ -385,9 +387,10 @@ export default function Home() {
     try {
       const res = await fetch('/api/tasks?projectId=null');
       const data = await res.json();
-      setLooseTasks(data);
+      setLooseTasks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching loose tasks:', error);
+      setLooseTasks([]);
     }
   };
 
