@@ -415,11 +415,15 @@ export default function Home() {
     }
 
     try {
-      await fetch(`/api/tasks/${task.id}`, {
+      const response = await fetch(`/api/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ toggle_complete: true })
       });
+
+      if (!response.ok) {
+        throw new Error('Server error');
+      }
 
       // Check for new achievements after completing a task (background)
       if (newCompletedStatus) {
@@ -451,11 +455,15 @@ export default function Home() {
     showToast('Reaccion enviada 💕');
 
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      const response = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reaction: emoji })
       });
+
+      if (!response.ok) {
+        throw new Error('Server error');
+      }
     } catch (error) {
       // Rollback on error
       console.error('Error adding reaction:', error);
@@ -578,7 +586,11 @@ export default function Home() {
         showToast('Tarea eliminada');
 
         try {
-          await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+          const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+
+          if (!response.ok) {
+            throw new Error('Server error');
+          }
         } catch (error) {
           // Rollback on error
           console.error('Error deleting task:', error);
@@ -656,6 +668,10 @@ export default function Home() {
           assigned_by: currentUser.id
         })
       });
+
+      if (!response.ok) {
+        throw new Error('Server error');
+      }
 
       const result = await response.json();
 
@@ -868,9 +884,11 @@ export default function Home() {
             >
               <div className="collapsible-title">
                 <span>💌 Asignadas por {getOtherUser()?.name}</span>
-                <span className="collapsible-badge">
-                  {assignedByOther.filter(t => !t.is_completed).length}
-                </span>
+                {assignedByOther.filter(t => !t.is_completed).length > 0 && (
+                  <span className="collapsible-badge">
+                    {assignedByOther.filter(t => !t.is_completed).length}
+                  </span>
+                )}
               </div>
               <span className="collapsible-arrow">▼</span>
             </button>
