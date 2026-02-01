@@ -1532,7 +1532,9 @@ function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy
               <span className="task-reaction-badge">{task.reaction}</span>
             )}
           </div>
-          {task.description && <div className="task-description">{task.description}</div>}
+          {task.description && task.description.trim() && task.description.trim() !== '()' && (
+            <div className="task-description">{task.description}</div>
+          )}
           <div className="task-meta">
             {showAssignedBy && task.assigned_by !== currentUserId && (
               <span className="task-meta-item">
