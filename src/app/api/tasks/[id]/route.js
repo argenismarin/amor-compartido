@@ -21,13 +21,14 @@ export async function PUT(request, { params }) {
       const newCompletedStatus = !task.is_completed;
       console.log('Updating to completed:', newCompletedStatus);
 
+      // Use explicit string values for PostgreSQL boolean
       await query(
         `UPDATE AppChecklist_tasks
-         SET is_completed = $1::boolean,
+         SET is_completed = $1,
              completed_at = $2,
              updated_at = NOW()
          WHERE id = $3`,
-        [newCompletedStatus, newCompletedStatus ? new Date() : null, id]
+        [newCompletedStatus ? 'true' : 'false', newCompletedStatus ? new Date() : null, id]
       );
       console.log('Task updated successfully');
 
