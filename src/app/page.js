@@ -127,6 +127,8 @@ export default function Home() {
 
   // Projects state
   const [projects, setProjects] = useState([]);
+  const [archivedProjects, setArchivedProjects] = useState([]);
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null); // null = ver lista, id = ver proyecto
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -159,7 +161,8 @@ export default function Home() {
     priority: 'medium',
     category_id: null,
     project_id: null,
-    recurrence: null
+    recurrence: null,
+    is_shared: false
   });
 
   // Reaction emojis
@@ -254,6 +257,7 @@ export default function Home() {
     fetchCategories();
     fetchSpecialDates();
     fetchProjects();
+    fetchArchivedProjects();
   }, []);
 
   // Fetch tasks when user changes
@@ -414,6 +418,18 @@ export default function Home() {
     } catch (error) {
       console.error('Error fetching projects:', error);
       setProjects([]);
+    }
+  };
+
+  const fetchArchivedProjects = async () => {
+    try {
+      const res = await fetch('/api/projects?includeArchived=true');
+      const data = await res.json();
+      const archived = Array.isArray(data) ? data.filter(p => p.is_archived) : [];
+      setArchivedProjects(archived);
+    } catch (error) {
+      console.error('Error fetching archived projects:', error);
+      setArchivedProjects([]);
     }
   };
 
@@ -695,6 +711,7 @@ export default function Home() {
           const response = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
           if (!response.ok) throw new Error('Server error');
           fetchProjects();
+          fetchArchivedProjects();
           setSelectedProject(null);
           showToast('Proyecto archivado');
         } catch (error) {
@@ -704,6 +721,23 @@ export default function Home() {
       },
       onCancel: () => setConfirmDialog(null)
     });
+  };
+
+  const handleRestoreProject = async (projectId) => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_archived: false })
+      });
+      if (!response.ok) throw new Error('Server error');
+      fetchProjects();
+      fetchArchivedProjects();
+      showToast('Proyecto restaurado');
+    } catch (error) {
+      console.error('Error restoring project:', error);
+      showToast('Error al restaurar el proyecto', 'error');
+    }
   };
 
   const openNewProject = () => {
@@ -904,7 +938,7 @@ export default function Home() {
 
     setShowModal(false);
     setEditingTask(null);
-    setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, project_id: null, recurrence: null });
+    setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, project_id: null, recurrence: null, is_shared: false });
     showToast(isEditing ? 'Tarea actualizada' : 'Tarea creada 💕');
 
     // Refresh project data if we're in projects tab
@@ -960,7 +994,8 @@ export default function Home() {
       priority: 'medium',
       category_id: null,
       project_id: projectId || (activeTab === 'projects' && selectedProject ? selectedProject : null),
-      recurrence: null
+      recurrence: null,
+      is_shared: false
     });
     setShowModal(true);
   };
@@ -975,7 +1010,8 @@ export default function Home() {
       priority: task.priority,
       category_id: task.category_id || null,
       project_id: task.project_id || null,
-      recurrence: task.recurrence || null
+      recurrence: task.recurrence || null,
+      is_shared: task.is_shared || false
     });
     setShowModal(true);
   };
@@ -1348,6 +1384,43 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
+                {/* Archived projects section */}
+                {archivedProjects.length > 0 && (
+                  <div className="archived-projects-section">
+                    <button
+                      className="archived-projects-toggle"
+                      onClick={() => setShowArchivedProjects(!showArchivedProjects)}
+                    >
+                      <span>📦 Proyectos archivados ({archivedProjects.length})</span>
+                      <span className={`toggle-arrow ${showArchivedProjects ? 'open' : ''}`}>▼</span>
+                    </button>
+                    {showArchivedProjects && (
+                      <div className="archived-projects-list">
+                        {archivedProjects.map(project => (
+                          <div key={project.id} className="archived-project-card">
+                            <div className="archived-project-info">
+                              <span className="archived-project-emoji">{project.emoji}</span>
+                              <div className="archived-project-details">
+                                <span className="archived-project-name">{project.name}</span>
+                                <span className="archived-project-stats">
+                                  {project.completed_tasks}/{project.total_tasks} tareas completadas
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              className="restore-project-btn"
+                              onClick={() => handleRestoreProject(project.id)}
+                              title="Restaurar proyecto"
+                            >
+                              ↩️
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -1440,16 +1513,27 @@ export default function Home() {
                     <button
                       type="button"
                       key={user.id}
-                      className={`assign-option ${formData.assigned_to === user.id ? 'selected' : ''}`}
-                      onClick={() => setFormData({...formData, assigned_to: user.id})}
+                      className={`assign-option ${formData.assigned_to === user.id && !formData.is_shared ? 'selected' : ''}`}
+                      onClick={() => setFormData({...formData, assigned_to: user.id, is_shared: false})}
                       role="radio"
-                      aria-checked={formData.assigned_to === user.id}
+                      aria-checked={formData.assigned_to === user.id && !formData.is_shared}
                       aria-label={`Asignar a ${user.name}`}
                     >
                       <span className="assign-emoji">{user.avatar_emoji}</span>
                       <span className="assign-name">{user.name}</span>
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={`assign-option assign-both ${formData.is_shared ? 'selected' : ''}`}
+                    onClick={() => setFormData({...formData, assigned_to: currentUser?.id, is_shared: true})}
+                    role="radio"
+                    aria-checked={formData.is_shared}
+                    aria-label="Asignar a ambos"
+                  >
+                    <span className="assign-emoji">💑</span>
+                    <span className="assign-name">Ambos</span>
+                  </button>
                 </div>
               </div>
 
@@ -2058,6 +2142,11 @@ function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy
         <div className="task-content">
           <div className="task-title-row">
             <span className="task-title">{task.title}</span>
+            {task.is_shared && (
+              <span className="task-shared-badge" title="Tarea compartida">
+                💑
+              </span>
+            )}
             {task.category_emoji && (
               <span className="task-category-badge" title={task.category_name}>
                 {task.category_emoji}

@@ -35,15 +35,18 @@ export async function GET(request) {
     };
 
     if (userId && filter === 'myTasks') {
-      addWhere(`t.assigned_to = $${paramIndex}`);
+      // Include tasks assigned to user OR shared tasks
+      addWhere(`(t.assigned_to = $${paramIndex} OR t.is_shared = true)`);
       params.push(userId);
       paramIndex++;
     } else if (userId && filter === 'assignedByOther') {
-      addWhere(`t.assigned_to = $${paramIndex} AND t.assigned_by != $${paramIndex + 1}`);
-      params.push(userId, userId);
-      paramIndex += 2;
+      // Tasks assigned to me by the other person, OR shared tasks created by the other person
+      addWhere(`((t.assigned_to = $${paramIndex} AND t.assigned_by != $${paramIndex + 1}) OR (t.is_shared = true AND t.assigned_by != $${paramIndex + 2}))`);
+      params.push(userId, userId, userId);
+      paramIndex += 3;
     } else if (userId && filter === 'assignedToOther') {
-      addWhere(`t.assigned_by = $${paramIndex} AND t.assigned_to != $${paramIndex + 1}`);
+      // Tasks I assigned to the other person (not shared ones, those are for both)
+      addWhere(`t.assigned_by = $${paramIndex} AND t.assigned_to != $${paramIndex + 1} AND (t.is_shared = false OR t.is_shared IS NULL)`);
       params.push(userId, userId);
       paramIndex += 2;
     }
@@ -80,13 +83,13 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days } = await request.json();
+    const { title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days, is_shared } = await request.json();
 
     const result = await queryOne(
-      `INSERT INTO AppChecklist_tasks (title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      `INSERT INTO AppChecklist_tasks (title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days, is_shared)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
       [title, description || null, assigned_to, assigned_by, due_date || null, priority || 'medium',
-       category_id || null, project_id || null, recurrence || null, recurrence_days || null]
+       category_id || null, project_id || null, recurrence || null, recurrence_days || null, is_shared || false]
     );
 
     return NextResponse.json({ success: true, id: result.id });

@@ -107,6 +107,10 @@ export async function initDatabase() {
                      WHERE table_name = 'appchecklist_tasks' AND column_name = 'project_id') THEN
         ALTER TABLE AppChecklist_tasks ADD COLUMN project_id INT NULL;
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'is_shared') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN is_shared BOOLEAN DEFAULT FALSE;
+      END IF;
     END $$;
   `);
 

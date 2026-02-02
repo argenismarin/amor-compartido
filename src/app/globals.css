@@ -802,6 +802,29 @@ body {
   color: var(--text);
 }
 
+.assign-option.assign-both {
+  background: linear-gradient(135deg, var(--primary-light), var(--burgundy-light));
+  border-color: #9C27B0;
+}
+
+.assign-option.assign-both:hover {
+  border-color: #7B1FA2;
+}
+
+.assign-option.assign-both.selected {
+  border-color: #7B1FA2;
+  background: linear-gradient(135deg, rgba(244, 143, 177, 0.3), rgba(114, 47, 55, 0.3));
+}
+
+/* Task Shared Badge */
+.task-shared-badge {
+  font-size: 0.75rem;
+  background: linear-gradient(135deg, var(--primary-light), var(--burgundy-light));
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+}
+
 .submit-btn {
   width: 100%;
   padding: 16px;
@@ -2886,6 +2909,111 @@ body {
   font-size: 0.85rem;
   color: var(--text-light);
   margin-bottom: 16px;
+}
+
+/* ============================================
+   ARCHIVED PROJECTS SECTION
+   ============================================ */
+.archived-projects-section {
+  margin-top: 24px;
+}
+
+.archived-projects-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-light);
+  transition: all 0.3s ease;
+}
+
+.archived-projects-toggle:hover {
+  background: var(--primary-light);
+}
+
+[data-user="argenis"] .archived-projects-toggle:hover {
+  background: var(--burgundy-light);
+}
+
+.toggle-arrow {
+  transition: transform 0.3s ease;
+}
+
+.toggle-arrow.open {
+  transform: rotate(180deg);
+}
+
+.archived-projects-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archived-project-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  opacity: 0.8;
+}
+
+.archived-project-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.archived-project-emoji {
+  font-size: 1.5rem;
+}
+
+.archived-project-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.archived-project-name {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.archived-project-stats {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.restore-project-btn {
+  padding: 8px 12px;
+  background: var(--primary-light);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.restore-project-btn:hover {
+  background: var(--primary);
+  transform: scale(1.1);
+}
+
+[data-user="argenis"] .restore-project-btn {
+  background: var(--burgundy-light);
+}
+
+[data-user="argenis"] .restore-project-btn:hover {
+  background: var(--burgundy);
 }
 
 /* ============================================
