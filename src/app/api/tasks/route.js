@@ -9,6 +9,7 @@ export async function GET(request) {
     const filter = searchParams.get('filter');
     const categoryId = searchParams.get('categoryId');
     const projectId = searchParams.get('projectId');
+    const excludeProjectTasks = searchParams.get('excludeProjectTasks') === 'true';
 
     let sql = `
       SELECT t.*,
@@ -60,6 +61,11 @@ export async function GET(request) {
       addWhere(`t.project_id = $${paramIndex}`);
       params.push(projectId);
       paramIndex++;
+    }
+
+    // Exclude tasks that belong to a project (for main task lists)
+    if (excludeProjectTasks) {
+      addWhere(`t.project_id IS NULL`);
     }
 
     sql += ' ORDER BY t.is_completed ASC, t.priority DESC, t.created_at DESC';

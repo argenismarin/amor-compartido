@@ -373,9 +373,11 @@ export default function Home() {
       if (activeTab === 'myTasks') {
         params.set('userId', currentUser.id);
         params.set('filter', 'myTasks');
+        params.set('excludeProjectTasks', 'true'); // Excluir tareas de proyectos
       } else if (activeTab === 'assignedToOther') {
         params.set('userId', currentUser.id);
         params.set('filter', 'assignedToOther');
+        params.set('excludeProjectTasks', 'true'); // Excluir tareas de proyectos
       }
 
       if (selectedCategory) {
@@ -521,7 +523,7 @@ export default function Home() {
 
   const fetchAssignedByOther = async () => {
     try {
-      const res = await fetch(`/api/tasks?userId=${currentUser.id}&filter=assignedByOther`);
+      const res = await fetch(`/api/tasks?userId=${currentUser.id}&filter=assignedByOther&excludeProjectTasks=true`);
       const data = await res.json();
       setAssignedByOther(data);
     } catch (error) {
