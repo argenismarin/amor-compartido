@@ -2799,6 +2799,55 @@ body {
 }
 
 /* ============================================
+   NEW PROJECT BUTTON (prominent)
+   ============================================ */
+.new-project-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 24px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px var(--shadow);
+}
+
+.new-project-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--shadow);
+}
+
+.new-project-btn:active {
+  transform: translateY(0);
+}
+
+[data-user="argenis"] .new-project-btn {
+  background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+  box-shadow: 0 4px 15px var(--burgundy-shadow);
+}
+
+[data-user="argenis"] .new-project-btn:hover {
+  box-shadow: 0 6px 20px var(--burgundy-shadow);
+}
+
+.new-project-icon {
+  font-size: 1.5rem;
+  color: white;
+  font-weight: 600;
+}
+
+.new-project-text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+}
+
+/* ============================================
    PROJECT DETAIL VIEW
    ============================================ */
 .project-tasks-view {

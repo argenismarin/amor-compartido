@@ -1344,6 +1344,11 @@ export default function Home() {
             ) : (
               // View project list
               <div className="projects-view">
+                <button className="new-project-btn" onClick={openNewProject}>
+                  <span className="new-project-icon">+</span>
+                  <span className="new-project-text">Nuevo Proyecto</span>
+                </button>
+
                 <div className="projects-grid">
                   {projects.map(project => (
                     <ProjectCard
@@ -1354,10 +1359,6 @@ export default function Home() {
                       onDelete={() => handleProjectDelete(project.id)}
                     />
                   ))}
-                  <button className="add-project-card" onClick={openNewProject}>
-                    <span className="add-project-icon">+</span>
-                    <span className="add-project-text">Nuevo Proyecto</span>
-                  </button>
                 </div>
 
                 {/* Loose tasks section */}
