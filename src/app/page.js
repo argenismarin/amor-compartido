@@ -740,6 +740,25 @@ export default function Home() {
     }
   };
 
+  const handleDeleteProjectPermanently = async (projectId, projectName) => {
+    setConfirmDialog({
+      message: `¿Eliminar "${projectName}" permanentemente? Esto borrará todas sus tareas.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const response = await fetch(`/api/projects/${projectId}?permanent=true`, { method: 'DELETE' });
+          if (!response.ok) throw new Error('Server error');
+          fetchArchivedProjects();
+          showToast('Proyecto eliminado permanentemente');
+        } catch (error) {
+          console.error('Error deleting project:', error);
+          showToast('Error al eliminar el proyecto', 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
   const openNewProject = () => {
     setEditingProject(null);
     setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
@@ -1409,13 +1428,22 @@ export default function Home() {
                                 </span>
                               </div>
                             </div>
-                            <button
-                              className="restore-project-btn"
-                              onClick={() => handleRestoreProject(project.id)}
-                              title="Restaurar proyecto"
-                            >
-                              ↩️
-                            </button>
+                            <div className="archived-project-actions">
+                              <button
+                                className="restore-project-btn"
+                                onClick={() => handleRestoreProject(project.id)}
+                                title="Restaurar proyecto"
+                              >
+                                ↩️
+                              </button>
+                              <button
+                                className="delete-project-btn"
+                                onClick={() => handleDeleteProjectPermanently(project.id, project.name)}
+                                title="Eliminar permanentemente"
+                              >
+                                🗑️
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

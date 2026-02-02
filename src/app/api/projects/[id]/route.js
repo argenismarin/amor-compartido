@@ -117,19 +117,24 @@ export async function DELETE(request, { params }) {
     await ensureDatabase();
     await ensureProjectsTable();
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const permanent = searchParams.get('permanent') === 'true';
 
-    // Soft delete - archive the project
-    await query(
-      'UPDATE AppChecklist_projects SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-      [id]
-    );
-
-    // Optionally: unassign tasks from the archived project
-    // await query('UPDATE AppChecklist_tasks SET project_id = NULL WHERE project_id = $1', [id]);
+    if (permanent) {
+      // Permanent delete - remove tasks first, then project
+      await query('DELETE FROM AppChecklist_tasks WHERE project_id = $1', [id]);
+      await query('DELETE FROM AppChecklist_projects WHERE id = $1', [id]);
+    } else {
+      // Soft delete - archive the project
+      await query(
+        'UPDATE AppChecklist_projects SET is_archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [id]
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error archiving project:', error);
-    return NextResponse.json({ error: 'Failed to archive project' }, { status: 500 });
+    console.error('Error deleting project:', error);
+    return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
   }
 }

@@ -3052,9 +3052,14 @@ body {
   color: var(--text-light);
 }
 
-.restore-project-btn {
+.archived-project-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.restore-project-btn,
+.delete-project-btn {
   padding: 8px 12px;
-  background: var(--primary-light);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -3062,8 +3067,21 @@ body {
   transition: all 0.3s ease;
 }
 
+.restore-project-btn {
+  background: var(--primary-light);
+}
+
 .restore-project-btn:hover {
   background: var(--primary);
+  transform: scale(1.1);
+}
+
+.delete-project-btn {
+  background: #ffebee;
+}
+
+.delete-project-btn:hover {
+  background: #ef5350;
   transform: scale(1.1);
 }
 
