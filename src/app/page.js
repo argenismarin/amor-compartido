@@ -52,12 +52,20 @@ const getBogotaDate = () => {
   return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
 };
 
+// Helper: Formatea una fecha como YYYY-MM-DD
+const toDateString = (date) =>
+  date.getFullYear() + '-' +
+  String(date.getMonth() + 1).padStart(2, '0') + '-' +
+  String(date.getDate()).padStart(2, '0');
+
 // Helper: Obtiene la fecha de hoy en formato YYYY-MM-DD (Bogotá)
-const getTodayString = () => {
-  const bogota = getBogotaDate();
-  return bogota.getFullYear() + '-' +
-    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
-    String(bogota.getDate()).padStart(2, '0');
+const getTodayString = () => toDateString(getBogotaDate());
+
+// Helper: Obtiene una fecha relativa a hoy (Bogotá) en formato YYYY-MM-DD
+const addDaysToToday = (days) => {
+  const d = getBogotaDate();
+  d.setDate(d.getDate() + days);
+  return toDateString(d);
 };
 
 // Helper: Parsea una fecha ISO/DATE evitando el problema de zona horaria
@@ -96,7 +104,23 @@ export default function Home() {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [collapsibleOpen, setCollapsibleOpen] = useState(false);
+  const [collapsibleOpen, setCollapsibleOpen] = useState(true);
+
+  // Restaurar preferencia del colapsible (default: abierto)
+  useEffect(() => {
+    const saved = localStorage.getItem('collapsibleOpen');
+    if (saved !== null) {
+      setCollapsibleOpen(saved === 'true');
+    }
+  }, []);
+
+  const toggleCollapsible = useCallback(() => {
+    setCollapsibleOpen(prev => {
+      const next = !prev;
+      localStorage.setItem('collapsibleOpen', String(next));
+      return next;
+    });
+  }, []);
 
   // Toast state
   const [toast, setToast] = useState(null);
@@ -164,6 +188,64 @@ export default function Home() {
     recurrence: null,
     is_shared: false
   });
+
+  // Search & sort state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('default');
+
+  // Restaurar preferencia de ordenamiento
+  useEffect(() => {
+    const saved = localStorage.getItem('sortBy');
+    if (saved) setSortBy(saved);
+  }, []);
+
+  const updateSortBy = useCallback((value) => {
+    setSortBy(value);
+    localStorage.setItem('sortBy', value);
+  }, []);
+
+  // Aplica búsqueda + ordenamiento a una lista de tareas, manteniendo
+  // incompletas primero como invariante.
+  const filterAndSortTasks = useCallback((list) => {
+    if (!Array.isArray(list)) return [];
+    let result = list;
+
+    // Búsqueda por título o descripción (case-insensitive)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(t =>
+        (t.title || '').toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Ordenamiento (manteniendo incompletas primero)
+    if (sortBy !== 'default') {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      const compareFns = {
+        dueDate: (a, b) => {
+          if (!a.due_date && !b.due_date) return 0;
+          if (!a.due_date) return 1;
+          if (!b.due_date) return -1;
+          return String(a.due_date).localeCompare(String(b.due_date));
+        },
+        priority: (a, b) =>
+          (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1),
+        alphabetical: (a, b) => (a.title || '').localeCompare(b.title || '', 'es'),
+        created: (a, b) =>
+          String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      };
+      const cmp = compareFns[sortBy];
+      if (cmp) {
+        result = [...result].sort((a, b) => {
+          if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+          return cmp(a, b);
+        });
+      }
+    }
+
+    return result;
+  }, [searchQuery, sortBy]);
 
   // Reaction emojis
   const REACTION_EMOJIS = ['💕', '❤️', '👏', '🎉', '😍'];
@@ -784,6 +866,15 @@ export default function Home() {
     }
 
     try {
+      // Pedir la VAPID public key al backend (fuente de verdad)
+      const keyRes = await fetch('/api/subscribe?publicKey=true');
+      const { publicKey } = await keyRes.json();
+
+      if (!publicKey) {
+        showToast('Las notificaciones aún no están configuradas en el servidor', 'error');
+        return;
+      }
+
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
 
@@ -791,9 +882,7 @@ export default function Home() {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(
-            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
-          )
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
         });
 
         // Save subscription to server
@@ -1192,8 +1281,9 @@ export default function Home() {
         {assignedByOther.length > 0 && (
           <section className={`collapsible ${collapsibleOpen ? 'open' : ''}`}>
             <button
+              type="button"
               className="collapsible-header"
-              onClick={() => setCollapsibleOpen(!collapsibleOpen)}
+              onClick={toggleCollapsible}
               aria-expanded={collapsibleOpen}
               aria-controls="collapsible-content"
             >
@@ -1252,6 +1342,45 @@ export default function Home() {
             📁 Proyectos
           </button>
         </div>
+
+        {/* Search & sort toolbar - only for tareas y proyectos */}
+        {(activeTab === 'myTasks' || activeTab === 'assignedToOther' || (activeTab === 'projects' && selectedProject)) && (
+          <div className="task-toolbar">
+            <div className="search-input-wrapper">
+              <span className="search-icon" aria-hidden="true">🔍</span>
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Buscar tareas..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                aria-label="Buscar tareas"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Limpiar búsqueda"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            <select
+              className="sort-select"
+              value={sortBy}
+              onChange={e => updateSortBy(e.target.value)}
+              aria-label="Ordenar tareas"
+            >
+              <option value="default">Por defecto</option>
+              <option value="dueDate">Fecha límite</option>
+              <option value="priority">Prioridad</option>
+              <option value="alphabetical">A-Z</option>
+              <option value="created">Más recientes</option>
+            </select>
+          </div>
+        )}
 
         {/* Category Filter - only show for myTasks and assignedToOther */}
         {activeTab !== 'projects' && categories.length > 0 && (
@@ -1334,31 +1463,44 @@ export default function Home() {
                     </div>
                   ) : null;
                 })()}
-                <div className="task-list">
-                  {projectTasks.length === 0 ? (
-                    <div className="empty-state">
-                      <div className="empty-state-icon">📋</div>
-                      <div className="empty-state-title">Sin tareas en este proyecto</div>
-                      <div className="empty-state-text">Agrega tareas con el botón +</div>
+                {(() => {
+                  const visibleProjectTasks = filterAndSortTasks(projectTasks);
+                  return (
+                    <div className="task-list">
+                      {projectTasks.length === 0 ? (
+                        <div className="empty-state">
+                          <div className="empty-state-icon">📋</div>
+                          <div className="empty-state-title">Sin tareas en este proyecto</div>
+                          <div className="empty-state-text">Agrega tareas con el botón +</div>
+                        </div>
+                      ) : visibleProjectTasks.length === 0 ? (
+                        <div className="empty-state">
+                          <div className="empty-state-icon">🔍</div>
+                          <div className="empty-state-title">Sin resultados</div>
+                          <div className="empty-state-text">
+                            Ninguna tarea coincide con &quot;{searchQuery}&quot;
+                          </div>
+                        </div>
+                      ) : (
+                        visibleProjectTasks.map(task => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onToggle={handleTaskToggle}
+                            onEdit={openEditTask}
+                            onDelete={handleTaskDelete}
+                            onReaction={handleReaction}
+                            showAssignedBy={true}
+                            currentUserId={currentUser?.id}
+                            assignedByName={task.assigned_by_name}
+                            togglingTaskId={togglingTaskId}
+                            reactionEmojis={REACTION_EMOJIS}
+                          />
+                        ))
+                      )}
                     </div>
-                  ) : (
-                    projectTasks.map(task => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onToggle={handleTaskToggle}
-                        onEdit={openEditTask}
-                        onDelete={handleTaskDelete}
-                        onReaction={handleReaction}
-                        showAssignedBy={true}
-                        currentUserId={currentUser?.id}
-                        assignedByName={task.assigned_by_name}
-                        togglingTaskId={togglingTaskId}
-                        reactionEmojis={REACTION_EMOJIS}
-                      />
-                    ))
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             ) : (
               // View project list
@@ -1456,45 +1598,56 @@ export default function Home() {
         )}
 
         {/* Task List - only show for myTasks and assignedToOther */}
-        {activeTab !== 'projects' && (
-          <div className="task-list">
-            {tasksLoading ? (
-              // Show skeleton loaders while loading
-              <>
-                <TaskCardSkeleton />
-                <TaskCardSkeleton />
-                <TaskCardSkeleton />
-              </>
-            ) : tasks.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-state-icon">💕</div>
-                <div className="empty-state-title">No hay tareas aún</div>
-                <div className="empty-state-text">
-                  {activeTab === 'myTasks'
-                    ? 'Crea una nueva tarea para ti'
-                    : `Asigna una tarea a ${getOtherUser()?.name}`
-                  }
+        {activeTab !== 'projects' && (() => {
+          const visibleTasks = filterAndSortTasks(tasks);
+          return (
+            <div className="task-list">
+              {tasksLoading ? (
+                // Show skeleton loaders while loading
+                <>
+                  <TaskCardSkeleton />
+                  <TaskCardSkeleton />
+                  <TaskCardSkeleton />
+                </>
+              ) : tasks.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">💕</div>
+                  <div className="empty-state-title">No hay tareas aún</div>
+                  <div className="empty-state-text">
+                    {activeTab === 'myTasks'
+                      ? 'Crea una nueva tarea para ti'
+                      : `Asigna una tarea a ${getOtherUser()?.name}`
+                    }
+                  </div>
                 </div>
-              </div>
-            ) : (
-              tasks.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onToggle={handleTaskToggle}
-                  onEdit={openEditTask}
-                  onDelete={handleTaskDelete}
-                  onReaction={handleReaction}
-                  showAssignedBy={activeTab === 'myTasks'}
-                  currentUserId={currentUser?.id}
-                  assignedByName={task.assigned_by_name}
-                  togglingTaskId={togglingTaskId}
-                  reactionEmojis={REACTION_EMOJIS}
-                />
-              ))
-            )}
-          </div>
-        )}
+              ) : visibleTasks.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">🔍</div>
+                  <div className="empty-state-title">Sin resultados</div>
+                  <div className="empty-state-text">
+                    Ninguna tarea coincide con &quot;{searchQuery}&quot;
+                  </div>
+                </div>
+              ) : (
+                visibleTasks.map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onToggle={handleTaskToggle}
+                    onEdit={openEditTask}
+                    onDelete={handleTaskDelete}
+                    onReaction={handleReaction}
+                    showAssignedBy={activeTab === 'myTasks'}
+                    currentUserId={currentUser?.id}
+                    assignedByName={task.assigned_by_name}
+                    togglingTaskId={togglingTaskId}
+                    reactionEmojis={REACTION_EMOJIS}
+                  />
+                ))
+              )}
+            </div>
+          );
+        })()}
       </main>
 
       {/* FAB */}
@@ -1568,12 +1721,9 @@ export default function Home() {
 
               <div className="form-group">
                 <label className="form-label">Fecha límite (opcional)</label>
-                <input
-                  type="date"
-                  className="form-input"
+                <DateInputWithShortcuts
                   value={formData.due_date}
-                  onChange={e => setFormData({...formData, due_date: e.target.value})}
-                  min={getTodayString()}
+                  onChange={value => setFormData({...formData, due_date: value})}
                 />
               </div>
 
@@ -1743,12 +1893,9 @@ export default function Home() {
 
               <div className="form-group">
                 <label className="form-label">Fecha límite (opcional)</label>
-                <input
-                  type="date"
-                  className="form-input"
+                <DateInputWithShortcuts
                   value={projectFormData.due_date}
-                  onChange={e => setProjectFormData({...projectFormData, due_date: e.target.value})}
-                  min={getTodayString()}
+                  onChange={value => setProjectFormData({...projectFormData, due_date: value})}
                 />
               </div>
 
@@ -2050,6 +2197,55 @@ export default function Home() {
         </div>
       )}
     </div>
+  );
+}
+
+// DateInputWithShortcuts Component - input date con chips de atajo
+function DateInputWithShortcuts({ value, onChange, minDate, allowPast = false }) {
+  const today = getTodayString();
+  const tomorrow = addDaysToToday(1);
+  const nextWeek = addDaysToToday(7);
+
+  return (
+    <>
+      <div className="date-shortcuts" role="group" aria-label="Atajos de fecha">
+        <button
+          type="button"
+          className={`date-shortcut ${value === today ? 'active' : ''}`}
+          onClick={() => onChange(today)}
+        >
+          Hoy
+        </button>
+        <button
+          type="button"
+          className={`date-shortcut ${value === tomorrow ? 'active' : ''}`}
+          onClick={() => onChange(tomorrow)}
+        >
+          Mañana
+        </button>
+        <button
+          type="button"
+          className={`date-shortcut ${value === nextWeek ? 'active' : ''}`}
+          onClick={() => onChange(nextWeek)}
+        >
+          Próx. semana
+        </button>
+        <button
+          type="button"
+          className={`date-shortcut ${!value ? 'active' : ''}`}
+          onClick={() => onChange('')}
+        >
+          Sin fecha
+        </button>
+      </div>
+      <input
+        type="date"
+        className="form-input"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        min={allowPast ? undefined : (minDate || today)}
+      />
+    </>
   );
 }
 

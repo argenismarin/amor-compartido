@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
+import { sendPushToUser } from '@/lib/push';
 
 export async function GET(request) {
   try {
@@ -91,6 +92,39 @@ export async function POST(request) {
       [title, description || null, assigned_to, assigned_by, due_date || null, priority || 'medium',
        category_id || null, project_id || null, recurrence || null, recurrence_days || null, is_shared || false]
     );
+
+    // Notificar a la pareja si se le asignó la tarea (no avisar al que la creó).
+    // Tareas compartidas (is_shared) → notificar al "otro" (assigned_to ya es el creador en ese caso).
+    try {
+      if (is_shared && assigned_by) {
+        // Tarea compartida: notificar al otro usuario
+        const otherUser = await queryOne(
+          'SELECT id FROM AppChecklist_users WHERE id != $1 LIMIT 1',
+          [assigned_by]
+        );
+        if (otherUser) {
+          await sendPushToUser(otherUser.id, {
+            title: '💕 Nueva tarea compartida',
+            body: title,
+            tag: `task-${result.id}`,
+          });
+        }
+      } else if (assigned_to && assigned_by && assigned_to !== assigned_by) {
+        // Tarea asignada a la pareja
+        const assigner = await queryOne(
+          'SELECT name FROM AppChecklist_users WHERE id = $1',
+          [assigned_by]
+        );
+        await sendPushToUser(assigned_to, {
+          title: `💌 ${assigner?.name || 'Tu pareja'} te asignó una tarea`,
+          body: title,
+          tag: `task-${result.id}`,
+        });
+      }
+    } catch (pushErr) {
+      // No bloquear la creación si el push falla
+      console.error('Error sending push for new task:', pushErr);
+    }
 
     return NextResponse.json({ success: true, id: result.id });
   } catch (error) {

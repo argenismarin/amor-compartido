@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
+import { getVapidPublicKey } from '@/lib/push';
 
 export async function POST(request) {
   try {
@@ -63,8 +64,14 @@ export async function DELETE(request) {
 
 export async function GET(request) {
   try {
-    await ensureDatabase();
     const { searchParams } = new URL(request.url);
+
+    // Si piden la public key (sin userId), devolverla sin tocar la BD
+    if (searchParams.get('publicKey') === 'true') {
+      return NextResponse.json({ publicKey: getVapidPublicKey() });
+    }
+
+    await ensureDatabase();
     const userId = searchParams.get('userId');
 
     if (userId) {

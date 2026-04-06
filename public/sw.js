@@ -1,7 +1,7 @@
 // Service Worker para Amor Compartido
 // Maneja notificaciones push y cache básico
 
-const CACHE_NAME = 'amor-compartido-v2';
+const CACHE_NAME = 'amor-compartido-v3';
 const urlsToCache = [
   '/icon-192.png',
   '/icon-512.png'
@@ -92,22 +92,26 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   let data = {
     title: 'Amor Compartido',
-    body: 'Tienes una nueva notificación',
+    body: '',
     type: 'motivation',
     icon: '/icon-192.png',
     badge: '/icon-192.png'
   };
 
+  let hadPayload = false;
   if (event.data) {
     try {
       data = { ...data, ...event.data.json() };
+      hadPayload = true;
     } catch (e) {
       data.body = event.data.text();
+      hadPayload = !!data.body;
     }
   }
 
-  // Select a message based on type if no specific body
-  if (!data.customBody) {
+  // Si el push no trajo body real, usar un mensaje motivacional random
+  // (caso de pushes silenciosos sin payload).
+  if (!hadPayload || !data.body) {
     const messages = NOTIFICATION_MESSAGES[data.type] || NOTIFICATION_MESSAGES.motivation;
     data.body = messages[Math.floor(Math.random() * messages.length)];
   }

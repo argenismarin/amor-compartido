@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { sendPushToUser } from '@/lib/push';
 
 // Zona horaria de Bogotá, Colombia (UTC-5)
 const TIMEZONE = 'America/Bogota';
@@ -31,13 +32,9 @@ export async function PUT(request, { params }) {
     const { id } = await params;
     const body = await request.json();
 
-    console.log('PUT /api/tasks/[id] - id:', id, 'body:', body);
-
     if (body.toggle_complete !== undefined) {
       // Toggle completion status
-      console.log('Fetching task...');
       const task = await queryOne('SELECT * FROM AppChecklist_tasks WHERE id = $1', [id]);
-      console.log('Task found:', task);
 
       if (!task) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
@@ -46,7 +43,6 @@ export async function PUT(request, { params }) {
       // Convert to proper boolean - handle both SMALLINT (1/0) and BOOLEAN columns
       const currentCompleted = task.is_completed === true || task.is_completed === 1 || task.is_completed === '1';
       const newCompletedStatus = !currentCompleted;
-      console.log('Updating to completed:', newCompletedStatus, 'from:', task.is_completed);
 
       await query(
         `UPDATE AppChecklist_tasks
@@ -56,13 +52,27 @@ export async function PUT(request, { params }) {
          WHERE id = $3`,
         [newCompletedStatus ? 1 : 0, newCompletedStatus ? getBogotaDate() : null, id]
       );
-      console.log('Task updated successfully');
 
       // Update streak if completing a task
       if (newCompletedStatus) {
-        console.log('Updating streak for user:', task.assigned_to);
         await updateStreak(task.assigned_to);
-        console.log('Streak updated');
+
+        // Notificar al que asignó la tarea (si es la pareja, no avisar al mismo)
+        try {
+          if (task.assigned_by && task.assigned_by !== task.assigned_to) {
+            const completer = await queryOne(
+              'SELECT name FROM AppChecklist_users WHERE id = $1',
+              [task.assigned_to]
+            );
+            await sendPushToUser(task.assigned_by, {
+              title: `🎉 ${completer?.name || 'Tu pareja'} completó una tarea`,
+              body: task.title,
+              tag: `task-done-${id}`,
+            });
+          }
+        } catch (pushErr) {
+          console.error('Error sending push for completion:', pushErr);
+        }
       }
 
       return NextResponse.json({ success: true, completed: newCompletedStatus ? true : false });
@@ -72,6 +82,30 @@ export async function PUT(request, { params }) {
         `UPDATE AppChecklist_tasks SET reaction = $1, updated_at = NOW() WHERE id = $2`,
         [body.reaction || null, id]
       );
+
+      // Notificar al usuario que completó la tarea de la reacción recibida
+      try {
+        if (body.reaction) {
+          const task = await queryOne(
+            'SELECT title, assigned_to, assigned_by FROM AppChecklist_tasks WHERE id = $1',
+            [id]
+          );
+          if (task && task.assigned_to && task.assigned_to !== task.assigned_by) {
+            const reactor = await queryOne(
+              'SELECT name FROM AppChecklist_users WHERE id = $1',
+              [task.assigned_by]
+            );
+            await sendPushToUser(task.assigned_to, {
+              title: `${body.reaction} ${reactor?.name || 'Tu pareja'} reaccionó a tu tarea`,
+              body: task.title,
+              tag: `reaction-${id}`,
+            });
+          }
+        }
+      } catch (pushErr) {
+        console.error('Error sending push for reaction:', pushErr);
+      }
+
       return NextResponse.json({ success: true });
     } else {
       // Update task details
@@ -98,8 +132,6 @@ async function updateStreak(userId) {
     const today = getTodayBogota();
     const yesterdayStr = getYesterdayBogota();
 
-    console.log('updateStreak - userId:', userId, 'today:', today, 'yesterday:', yesterdayStr);
-
     // Simple approach: first check if streak exists
     const existingStreak = await queryOne(
       'SELECT * FROM AppChecklist_streaks WHERE user_id = $1',
@@ -108,7 +140,6 @@ async function updateStreak(userId) {
 
     if (!existingStreak) {
       // Create new streak
-      console.log('Creating new streak for user:', userId);
       await query(
         'INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity) VALUES ($1, 1, 1, $2)',
         [userId, today]
@@ -119,11 +150,8 @@ async function updateStreak(userId) {
         ? String(existingStreak.last_activity).split('T')[0]
         : null;
 
-      console.log('Existing streak - lastActivity:', lastActivity);
-
       if (lastActivity === today) {
         // Already updated today, do nothing
-        console.log('Already updated today, skipping');
         return;
       }
 
@@ -134,15 +162,11 @@ async function updateStreak(userId) {
 
       const newBest = Math.max(newStreak, existingStreak.best_streak);
 
-      console.log('Updating streak - newStreak:', newStreak, 'newBest:', newBest);
-
       await query(
         'UPDATE AppChecklist_streaks SET current_streak = $1, best_streak = $2, last_activity = $3, updated_at = NOW() WHERE user_id = $4',
         [newStreak, newBest, today, userId]
       );
     }
-
-    console.log('Streak update completed');
   } catch (error) {
     console.error('Error updating streak:', error);
     // Don't rethrow - streak update failure shouldn't break task toggle
