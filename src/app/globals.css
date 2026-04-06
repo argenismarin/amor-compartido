@@ -3723,3 +3723,23 @@ body {
     color: var(--text);
   }
 }
+
+/* ============================================
+   PREFERS-REDUCED-MOTION (D1)
+   ============================================
+   Para usuarios sensibles al movimiento (vestibular disorders, migrañas).
+   Reducimos drásticamente todas las duraciones en lugar de eliminar las
+   animaciones por completo, así los componentes que dependen de animaciones
+   para entrar/salir del DOM (toast, modal, banner) siguen funcionando pero
+   son imperceptibles.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

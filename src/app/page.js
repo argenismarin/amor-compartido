@@ -8,6 +8,10 @@ import {
   REACTION_EMOJIS,
 } from '@/lib/constants';
 import { formatDateDisplay } from '@/lib/dates';
+import useToast from '@/hooks/useToast';
+import useNotifications from '@/hooks/useNotifications';
+import useStreak from '@/hooks/useStreak';
+import useAchievements from '@/hooks/useAchievements';
 import TaskCard from '@/components/TaskCard';
 import TaskCardSkeleton from '@/components/TaskCardSkeleton';
 import ProjectCard from '@/components/ProjectCard';
@@ -60,9 +64,8 @@ export default function Home() {
     }
   }, [collapsibleOpen, markAssignedByOtherAsSeen]);
 
-  // Toast state (soporta { message, type, action: { label, onClick } })
-  const [toast, setToast] = useState(null);
-  const toastTimerRef = useRef(null);
+  // Toast state via custom hook (soporta acción opcional con auto-dismiss)
+  const { toast, showToast, dismissToast } = useToast();
 
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -78,10 +81,14 @@ export default function Home() {
   const [celebrationBanner, setCelebrationBanner] = useState(null);
   const prevProgressRef = useRef(0);
 
-  // Gamification states
-  const [streak, setStreak] = useState({ current_streak: 0, best_streak: 0 });
-  const [achievements, setAchievements] = useState([]);
-  const [newAchievement, setNewAchievement] = useState(null);
+  // Gamification state via custom hooks
+  const { streak, fetchStreak } = useStreak(currentUser);
+  const {
+    achievements,
+    newAchievement,
+    fetchAchievements,
+    checkNewAchievements,
+  } = useAchievements(currentUser);
   const [showAchievementsModal, setShowAchievementsModal] = useState(false);
 
   // Categories state
@@ -111,9 +118,6 @@ export default function Home() {
   const [todaySpecialDate, setTodaySpecialDate] = useState(null);
   const [mesiversarioInfo, setMesiversarioInfo] = useState(null);
 
-  // Push notification state
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState('default');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -189,30 +193,6 @@ export default function Home() {
     return result;
   }, [searchQuery, sortBy]);
 
-  // Toast helper function
-  // options: { duration?: number, action?: { label, onClick } }
-  const showToast = useCallback((message, type = 'success', options = {}) => {
-    const { duration, action = null } = options;
-    const finalDuration = duration ?? (action ? 7000 : 3000);
-
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-    }
-    setToast({ message, type, action });
-    toastTimerRef.current = setTimeout(() => {
-      setToast(null);
-      toastTimerRef.current = null;
-    }, finalDuration);
-  }, []);
-
-  const dismissToast = useCallback(() => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-    setToast(null);
-  }, []);
-
   // Get random motivational message
   const getRandomMessage = useCallback(() => {
     return MOTIVATIONAL_MESSAGES[Math.floor(Math.random() * MOTIVATIONAL_MESSAGES.length)];
@@ -238,6 +218,12 @@ export default function Home() {
 
   // Trigger confetti animation
   const triggerConfetti = useCallback(() => {
+    // Respetar prefers-reduced-motion: si está activo, saltar el confetti
+    // (50 nodos del DOM sin animar siguen siendo carga visual innecesaria)
+    if (typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
     const newConfetti = [];
     const numPieces = 50;
 
@@ -271,24 +257,13 @@ export default function Home() {
     showCelebrationBanner(message, '¡El amor crece cada día! 💕');
   }, [triggerConfetti, triggerFloatingHearts, showCelebrationBanner]);
 
-  // Register Service Worker and check notification permission
-  useEffect(() => {
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.register('/sw.js')
-        .then((registration) => {
-          console.log('Service Worker registrado:', registration);
-        })
-        .catch((error) => {
-          console.error('Error registrando Service Worker:', error);
-        });
-
-      // Check current notification permission
-      if ('Notification' in window) {
-        setNotificationPermission(Notification.permission);
-        setNotificationsEnabled(Notification.permission === 'granted');
-      }
-    }
-  }, []);
+  // Notifications hook (registra SW, gestiona suscripción push y permisos)
+  const {
+    notificationsEnabled,
+    notificationPermission,
+    enableNotifications,
+    disableNotifications,
+  } = useNotifications(currentUser, showToast);
 
   // Fetch users on mount
   useEffect(() => {
@@ -494,29 +469,6 @@ export default function Home() {
     }
   };
 
-  const fetchStreak = async () => {
-    try {
-      const res = await fetch(`/api/streaks?userId=${currentUser.id}`);
-      const data = await res.json();
-      setStreak(data);
-    } catch (error) {
-      console.error('Error fetching streak:', error);
-    }
-  };
-
-  const fetchAchievements = async () => {
-    if (!currentUser?.id) return;
-    try {
-      const res = await fetch(`/api/achievements?userId=${currentUser.id}`);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setAchievements(data);
-      }
-    } catch (error) {
-      console.error('Error fetching achievements:', error);
-    }
-  };
-
   const fetchSpecialDates = async () => {
     try {
       const res = await fetch('/api/special-dates');
@@ -553,27 +505,6 @@ export default function Home() {
       }
     }
     setTodaySpecialDate(null);
-  };
-
-  const checkNewAchievements = async () => {
-    if (!currentUser?.id) return;
-    try {
-      const res = await fetch('/api/achievements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id })
-      });
-      const data = await res.json();
-      if (data.newAchievements && data.newAchievements.length > 0) {
-        const achievement = data.newAchievements[0];
-        setNewAchievement(achievement);
-        triggerConfetti();
-        setTimeout(() => setNewAchievement(null), 4000);
-        fetchAchievements();
-      }
-    } catch (error) {
-      console.error('Error checking achievements:', error);
-    }
   };
 
   const fetchAssignedByOther = async () => {
@@ -816,94 +747,6 @@ export default function Home() {
     setShowProjectModal(true);
   };
 
-  const enableNotifications = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      showToast('Tu navegador no soporta notificaciones', 'error');
-      return;
-    }
-
-    try {
-      // Pedir la VAPID public key al backend (fuente de verdad)
-      const keyRes = await fetch('/api/subscribe?publicKey=true');
-      const { publicKey } = await keyRes.json();
-
-      if (!publicKey) {
-        showToast('Las notificaciones aún no están configuradas en el servidor', 'error');
-        return;
-      }
-
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-
-      if (permission === 'granted') {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey)
-        });
-
-        // Save subscription to server
-        await fetch('/api/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: currentUser?.id,
-            subscription: subscription.toJSON()
-          })
-        });
-
-        setNotificationsEnabled(true);
-        showToast('¡Notificaciones activadas! 🔔');
-
-        // Show a test notification
-        registration.showNotification('Amor Compartido 💕', {
-          body: '¡Notificaciones activadas! Te avisaremos de lo importante.',
-          icon: '/icon-192.png',
-          badge: '/icon-192.png'
-        });
-      } else {
-        showToast('Permiso de notificaciones denegado', 'error');
-      }
-    } catch (error) {
-      console.error('Error enabling notifications:', error);
-      showToast('Error al activar notificaciones', 'error');
-    }
-  };
-
-  const disableNotifications = async () => {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-
-      if (subscription) {
-        await subscription.unsubscribe();
-        await fetch(`/api/subscribe?endpoint=${encodeURIComponent(subscription.endpoint)}`, {
-          method: 'DELETE'
-        });
-      }
-
-      setNotificationsEnabled(false);
-      showToast('Notificaciones desactivadas');
-    } catch (error) {
-      console.error('Error disabling notifications:', error);
-      showToast('Error al desactivar notificaciones', 'error');
-    }
-  };
-
-  // Helper function for VAPID key conversion
-  function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
   const handleUndoDelete = useCallback(async (taskId) => {
     try {
       const response = await fetch(`/api/tasks/${taskId}/restore`, { method: 'POST' });
@@ -1040,14 +883,32 @@ export default function Home() {
     }
 
     try {
+      const payload = {
+        ...formData,
+        assigned_by: currentUser.id,
+      };
+      // Optimistic locking: si estamos editando, mandamos el updated_at
+      // que vimos para que el server detecte si cambió desde entonces.
+      if (isEditing && editingTask?.updated_at) {
+        payload.expected_updated_at = editingTask.updated_at;
+      }
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          assigned_by: currentUser.id
-        })
+        body: JSON.stringify(payload),
       });
+
+      // 409 Conflict: la pareja editó la tarea entre que la abrimos y guardamos
+      if (response.status === 409) {
+        setTasks(previousTasks);
+        setAssignedByOther(previousAssignedByOther);
+        // Refrescar para que el usuario vea la versión actual
+        fetchTasks(false);
+        fetchAssignedByOther();
+        showToast('Tu pareja editó esta tarea, refrescamos los cambios', 'info', { duration: 5000 });
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Server error');
@@ -1293,6 +1154,13 @@ export default function Home() {
     }
     prevProgressRef.current = progressPercentage;
   }, [progressPercentage, totalTasks, triggerConfetti, showCelebrationBanner]);
+
+  // Celebrate when a new achievement is unlocked (gestionado por useAchievements)
+  useEffect(() => {
+    if (newAchievement) {
+      triggerConfetti();
+    }
+  }, [newAchievement, triggerConfetti]);
 
   const getOtherUser = () => users.find(u => u.id !== currentUser?.id);
   

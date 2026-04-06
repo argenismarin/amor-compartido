@@ -160,16 +160,56 @@ export async function PUT(request, { params }) {
 
       return NextResponse.json({ success: true });
     } else {
-      // Update task details
-      const { title, description, assigned_to, due_date, priority, category_id, project_id, recurrence, recurrence_days, is_shared } = body;
-      await query(
-        `UPDATE AppChecklist_tasks
-         SET title = $1, description = $2, assigned_to = $3, due_date = $4, priority = $5,
-             category_id = $6, project_id = $7, recurrence = $8, recurrence_days = $9, is_shared = $10, updated_at = NOW()
-         WHERE id = $11`,
-        [title, description || null, assigned_to, due_date || null, priority,
-         category_id || null, project_id || null, recurrence || null, recurrence_days || null, is_shared || false, id]
-      );
+      // Update task details — con optimistic locking si el cliente envía
+      // expected_updated_at. Esto previene que un usuario sobrescriba los
+      // cambios de su pareja en silencio.
+      const {
+        title, description, assigned_to, due_date, priority,
+        category_id, project_id, recurrence, recurrence_days, is_shared,
+        expected_updated_at,
+      } = body;
+
+      let updated;
+      if (expected_updated_at) {
+        updated = await query(
+          `UPDATE AppChecklist_tasks
+           SET title = $1, description = $2, assigned_to = $3, due_date = $4, priority = $5,
+               category_id = $6, project_id = $7, recurrence = $8, recurrence_days = $9, is_shared = $10, updated_at = NOW()
+           WHERE id = $11 AND updated_at = $12
+           RETURNING id`,
+          [title, description || null, assigned_to, due_date || null, priority,
+           category_id || null, project_id || null, recurrence || null, recurrence_days || null, is_shared || false,
+           id, expected_updated_at]
+        );
+      } else {
+        updated = await query(
+          `UPDATE AppChecklist_tasks
+           SET title = $1, description = $2, assigned_to = $3, due_date = $4, priority = $5,
+               category_id = $6, project_id = $7, recurrence = $8, recurrence_days = $9, is_shared = $10, updated_at = NOW()
+           WHERE id = $11
+           RETURNING id`,
+          [title, description || null, assigned_to, due_date || null, priority,
+           category_id || null, project_id || null, recurrence || null, recurrence_days || null, is_shared || false, id]
+        );
+      }
+
+      // Si vino expected_updated_at y no se actualizó nada, hubo conflict.
+      if (expected_updated_at && updated.length === 0) {
+        const current = await queryOne(
+          `SELECT t.*,
+            u_to.name as assigned_to_name, u_to.avatar_emoji as assigned_to_avatar,
+            u_by.name as assigned_by_name, u_by.avatar_emoji as assigned_by_avatar
+           FROM AppChecklist_tasks t
+           JOIN AppChecklist_users u_to ON t.assigned_to = u_to.id
+           JOIN AppChecklist_users u_by ON t.assigned_by = u_by.id
+           WHERE t.id = $1`,
+          [id]
+        );
+        return NextResponse.json(
+          { error: 'conflict', message: 'La tarea fue modificada por tu pareja', current },
+          { status: 409 }
+        );
+      }
     }
 
     return NextResponse.json({ success: true });
