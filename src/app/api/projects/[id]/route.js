@@ -1,35 +1,20 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
 
-// Ensure projects table exists
-async function ensureProjectsTable() {
-  await query(`
-    CREATE TABLE IF NOT EXISTS AppChecklist_projects (
-      id SERIAL PRIMARY KEY,
-      name VARCHAR(100) NOT NULL,
-      description TEXT,
-      emoji VARCHAR(10) DEFAULT '📁',
-      color VARCHAR(20) DEFAULT '#6366f1',
-      due_date DATE NULL,
-      is_archived SMALLINT DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-}
+// La tabla AppChecklist_projects se crea en initDatabase() / ensureDatabase().
+// No hace falta una función extra acá.
 
 export async function GET(request, { params }) {
   try {
     await ensureDatabase();
-    await ensureProjectsTable();
     const { id } = await params;
 
     const project = await queryOne(
       `SELECT p.*,
         COUNT(t.id) as total_tasks,
-        COUNT(CASE WHEN t.is_completed = 1 THEN 1 END) as completed_tasks
+        COUNT(CASE WHEN t.is_completed THEN 1 END) as completed_tasks
        FROM AppChecklist_projects p
-       LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id
+       LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
        WHERE p.id = $1
        GROUP BY p.id`,
       [id]
@@ -49,7 +34,6 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     await ensureDatabase();
-    await ensureProjectsTable();
     const { id } = await params;
     const { name, description, emoji, color, due_date, is_archived } = await request.json();
 
@@ -115,7 +99,6 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     await ensureDatabase();
-    await ensureProjectsTable();
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const permanent = searchParams.get('permanent') === 'true';

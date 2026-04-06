@@ -1,31 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { sendPushToUser } from '@/lib/push';
-
-// Zona horaria de Bogotá, Colombia (UTC-5)
-const TIMEZONE = 'America/Bogota';
-
-// Helper: Obtiene la fecha/hora actual en Bogotá
-const getBogotaDate = () => {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
-};
-
-// Helper: Obtiene la fecha de hoy en formato YYYY-MM-DD (Bogotá)
-const getTodayBogota = () => {
-  const bogota = getBogotaDate();
-  return bogota.getFullYear() + '-' +
-    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
-    String(bogota.getDate()).padStart(2, '0');
-};
-
-// Helper: Obtiene la fecha de ayer en formato YYYY-MM-DD (Bogotá)
-const getYesterdayBogota = () => {
-  const bogota = getBogotaDate();
-  bogota.setDate(bogota.getDate() - 1);
-  return bogota.getFullYear() + '-' +
-    String(bogota.getMonth() + 1).padStart(2, '0') + '-' +
-    String(bogota.getDate()).padStart(2, '0');
-};
+import { getBogotaDate, getTodayBogota, getYesterdayBogota } from '@/lib/timezone';
 
 // Helper: Calcula la siguiente fecha límite para una tarea recurrente.
 // Si la tarea tenía due_date, suma desde ahí; si no, desde hoy.
@@ -72,9 +48,8 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
       }
 
-      // Convert to proper boolean - handle both SMALLINT (1/0) and BOOLEAN columns
-      const currentCompleted = task.is_completed === true || task.is_completed === 1 || task.is_completed === '1';
-      const newCompletedStatus = !currentCompleted;
+      // is_completed es BOOLEAN puro (normalizado por la migración en db.js)
+      const newCompletedStatus = !task.is_completed;
 
       await query(
         `UPDATE AppChecklist_tasks
@@ -82,7 +57,7 @@ export async function PUT(request, { params }) {
              completed_at = $2,
              updated_at = NOW()
          WHERE id = $3`,
-        [newCompletedStatus ? 1 : 0, newCompletedStatus ? getBogotaDate() : null, id]
+        [newCompletedStatus, newCompletedStatus ? getBogotaDate() : null, id]
       );
 
       // Update streak if completing a task

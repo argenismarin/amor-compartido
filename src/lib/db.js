@@ -118,6 +118,82 @@ export async function initDatabase() {
     END $$;
   `);
 
+  // C5: Normalizar is_completed y is_archived a BOOLEAN puro.
+  // Heredado de la migración MySQL→Postgres: algunas instalaciones tenían
+  // estas columnas como SMALLINT (0/1). Convertir a BOOLEAN si es necesario.
+  await query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'appchecklist_tasks'
+          AND column_name = 'is_completed'
+          AND data_type IN ('smallint', 'integer')
+      ) THEN
+        ALTER TABLE AppChecklist_tasks
+          ALTER COLUMN is_completed DROP DEFAULT,
+          ALTER COLUMN is_completed TYPE BOOLEAN USING (is_completed::boolean),
+          ALTER COLUMN is_completed SET DEFAULT FALSE;
+      END IF;
+
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'appchecklist_projects'
+          AND column_name = 'is_archived'
+          AND data_type IN ('smallint', 'integer')
+      ) THEN
+        ALTER TABLE AppChecklist_projects
+          ALTER COLUMN is_archived DROP DEFAULT,
+          ALTER COLUMN is_archived TYPE BOOLEAN USING (is_archived::boolean),
+          ALTER COLUMN is_archived SET DEFAULT FALSE;
+      END IF;
+    END $$;
+  `);
+
+  // C4: Foreign keys explícitas para category_id y project_id en tasks.
+  // Históricamente estas columnas se añadieron a mano sin FK, así que algunas
+  // filas pueden apuntar a ids huérfanos. Antes de añadir la constraint,
+  // nullificamos las referencias rotas. ON DELETE SET NULL preserva la tarea
+  // pero limpia la referencia si la categoría o el proyecto se borra.
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'appchecklist_tasks_category_id_fkey'
+          AND table_name = 'appchecklist_tasks'
+      ) THEN
+        UPDATE AppChecklist_tasks
+        SET category_id = NULL
+        WHERE category_id IS NOT NULL
+          AND category_id NOT IN (SELECT id FROM AppChecklist_categories);
+
+        ALTER TABLE AppChecklist_tasks
+          ADD CONSTRAINT appchecklist_tasks_category_id_fkey
+          FOREIGN KEY (category_id)
+          REFERENCES AppChecklist_categories(id)
+          ON DELETE SET NULL;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'appchecklist_tasks_project_id_fkey'
+          AND table_name = 'appchecklist_tasks'
+      ) THEN
+        UPDATE AppChecklist_tasks
+        SET project_id = NULL
+        WHERE project_id IS NOT NULL
+          AND project_id NOT IN (SELECT id FROM AppChecklist_projects);
+
+        ALTER TABLE AppChecklist_tasks
+          ADD CONSTRAINT appchecklist_tasks_project_id_fkey
+          FOREIGN KEY (project_id)
+          REFERENCES AppChecklist_projects(id)
+          ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
   // Create streaks table for gamification
   await query(`
     CREATE TABLE IF NOT EXISTS AppChecklist_streaks (

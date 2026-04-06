@@ -1,13 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, ensureDatabase } from '@/lib/db';
-
-// Zona horaria de Bogotá, Colombia (UTC-5)
-const TIMEZONE = 'America/Bogota';
-
-// Helper: Obtiene la fecha/hora actual en Bogotá
-const getBogotaDate = () => {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
-};
+import { getBogotaDate } from '@/lib/timezone';
 
 export async function GET(request) {
   try {
