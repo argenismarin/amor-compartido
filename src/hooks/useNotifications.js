@@ -26,10 +26,23 @@ function urlBase64ToUint8Array(base64String) {
 //
 // Devuelve: { notificationsEnabled, notificationPermission, enableNotifications, disableNotifications }
 export default function useNotifications(currentUser, showToast) {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState('default');
+  // Lazy initialization para leer el permiso actual SIN llamar a setState
+  // dentro de un useEffect (evita la regla react-hooks/set-state-in-effect
+  // que es nueva en next 16.2). El check `typeof window` cubre SSR.
+  const [notificationPermission, setNotificationPermission] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'default';
+  });
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission === 'granted';
+    }
+    return false;
+  });
 
-  // Registrar Service Worker y leer el permiso actual al montar
+  // Registrar el Service Worker al montar (esto SÍ es side effect legítimo)
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       navigator.serviceWorker.register('/sw.js')
@@ -39,11 +52,6 @@ export default function useNotifications(currentUser, showToast) {
         .catch((error) => {
           console.error('Error registrando Service Worker:', error);
         });
-
-      if ('Notification' in window) {
-        setNotificationPermission(Notification.permission);
-        setNotificationsEnabled(Notification.permission === 'granted');
-      }
     }
   }, []);
 

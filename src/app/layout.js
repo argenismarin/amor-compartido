@@ -4,18 +4,20 @@ export const metadata = {
   title: "Amor Compartido",
   description: "Comparte tareas con tu pareja 💕",
   manifest: "/manifest.json",
-  themeColor: "#F48FB1",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Amor Compartido",
   },
+};
+
+// Next 16 requiere themeColor y viewport en su propio export
+export const viewport = {
+  themeColor: "#F48FB1",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }) {

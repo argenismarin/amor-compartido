@@ -28,6 +28,11 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // CRITICAL: bloquea el Service Worker durante los tests.
+    // Sin esto, sw.js intercepta los fetches a /api/* y los pasa al server
+    // real (que falla con ECONNREFUSED a Postgres). Con block, todos los
+    // fetches van por el main frame donde page.route() los puede interceptar.
+    serviceWorkers: 'block',
   },
 
   // Solo Chromium en viewport mobile (la app es mobile-first).
