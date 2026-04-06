@@ -27,6 +27,38 @@ const getYesterdayBogota = () => {
     String(bogota.getDate()).padStart(2, '0');
 };
 
+// Helper: Calcula la siguiente fecha límite para una tarea recurrente.
+// Si la tarea tenía due_date, suma desde ahí; si no, desde hoy.
+function calculateNextDueDate(currentDueDateStr, recurrence) {
+  let baseDate;
+  if (currentDueDateStr) {
+    // Parsear YYYY-MM-DD evitando shifts de zona horaria
+    const parts = String(currentDueDateStr).split('T')[0].split('-');
+    baseDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  } else {
+    baseDate = getBogotaDate();
+    baseDate.setHours(0, 0, 0, 0);
+  }
+
+  switch (recurrence) {
+    case 'daily':
+      baseDate.setDate(baseDate.getDate() + 1);
+      break;
+    case 'weekly':
+      baseDate.setDate(baseDate.getDate() + 7);
+      break;
+    case 'monthly':
+      baseDate.setMonth(baseDate.getMonth() + 1);
+      break;
+    default:
+      return null;
+  }
+
+  return baseDate.getFullYear() + '-' +
+    String(baseDate.getMonth() + 1).padStart(2, '0') + '-' +
+    String(baseDate.getDate()).padStart(2, '0');
+}
+
 export async function PUT(request, { params }) {
   try {
     const { id } = await params;
@@ -72,6 +104,26 @@ export async function PUT(request, { params }) {
           }
         } catch (pushErr) {
           console.error('Error sending push for completion:', pushErr);
+        }
+
+        // Si la tarea es recurrente, generar la siguiente instancia
+        if (task.recurrence) {
+          const nextDueDate = calculateNextDueDate(task.due_date, task.recurrence);
+          if (nextDueDate) {
+            try {
+              await query(
+                `INSERT INTO AppChecklist_tasks
+                 (title, description, assigned_to, assigned_by, due_date, priority,
+                  category_id, project_id, recurrence, recurrence_days, is_shared)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [task.title, task.description, task.assigned_to, task.assigned_by,
+                 nextDueDate, task.priority, task.category_id, task.project_id,
+                 task.recurrence, task.recurrence_days, task.is_shared || false]
+              );
+            } catch (recurErr) {
+              console.error('Error creating recurring task:', recurErr);
+            }
+          }
         }
       }
 
@@ -176,7 +228,12 @@ async function updateStreak(userId) {
 export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
-    await query('DELETE FROM AppChecklist_tasks WHERE id = $1', [id]);
+    // Soft delete: marcar deleted_at en lugar de borrar realmente.
+    // Esto permite "deshacer" desde el cliente durante un periodo corto.
+    await query(
+      'UPDATE AppChecklist_tasks SET deleted_at = NOW() WHERE id = $1',
+      [id]
+    );
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting task:', error);

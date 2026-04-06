@@ -41,7 +41,7 @@ export async function GET(request) {
         COUNT(t.id) as total_tasks,
         COUNT(CASE WHEN t.is_completed = 1 THEN 1 END) as completed_tasks
       FROM AppChecklist_projects p
-      LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id
+      LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
     `;
 
     // Filter out archived projects

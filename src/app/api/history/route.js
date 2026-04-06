@@ -26,7 +26,7 @@ export async function GET(request) {
       JOIN AppChecklist_users u_to ON t.assigned_to = u_to.id
       JOIN AppChecklist_users u_by ON t.assigned_by = u_by.id
       LEFT JOIN AppChecklist_categories c ON t.category_id = c.id
-      WHERE t.is_completed = true
+      WHERE t.is_completed = true AND t.deleted_at IS NULL
     `;
 
     const params = [];
@@ -46,7 +46,7 @@ export async function GET(request) {
     // Get stats
     let statsParams = [];
     let statsParamIndex = 1;
-    let statsWhere = 'WHERE is_completed = true';
+    let statsWhere = 'WHERE is_completed = true AND deleted_at IS NULL';
 
     if (userId) {
       statsWhere += ` AND assigned_to = $${statsParamIndex}`;

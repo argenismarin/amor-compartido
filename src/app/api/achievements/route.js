@@ -84,10 +84,11 @@ async function checkAndUnlockAchievements(userId) {
           AND EXTRACT(DOW FROM completed_at) IN (0, 6)
           AND completed_at >= CURRENT_DATE - INTERVAL '7 days') as weekend_tasks,
         EXISTS (SELECT 1 FROM AppChecklist_tasks WHERE assigned_to = $1 AND is_completed = true
-          AND EXTRACT(HOUR FROM completed_at) < 8) as early_bird,
+          AND deleted_at IS NULL AND EXTRACT(HOUR FROM completed_at) < 8) as early_bird,
         EXISTS (SELECT 1 FROM AppChecklist_tasks WHERE assigned_to = $1 AND is_completed = true
-          AND EXTRACT(HOUR FROM completed_at) >= 22) as night_owl
+          AND deleted_at IS NULL AND EXTRACT(HOUR FROM completed_at) >= 22) as night_owl
       FROM AppChecklist_tasks
+      WHERE deleted_at IS NULL
     ),
     streak_stats AS (
       SELECT COALESCE(current_streak, 0) as current_streak, COALESCE(best_streak, 0) as best_streak
@@ -96,7 +97,7 @@ async function checkAndUnlockAchievements(userId) {
     team_day AS (
       SELECT COUNT(DISTINCT assigned_to) as users_completed_today
       FROM AppChecklist_tasks
-      WHERE is_completed = true AND DATE(completed_at) = $2
+      WHERE is_completed = true AND deleted_at IS NULL AND DATE(completed_at) = $2
     ),
     special_dates AS (
       SELECT date FROM AppChecklist_special_dates WHERE type = 'anniversary' LIMIT 1

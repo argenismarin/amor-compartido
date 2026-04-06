@@ -111,6 +111,10 @@ export async function initDatabase() {
                      WHERE table_name = 'appchecklist_tasks' AND column_name = 'is_shared') THEN
         ALTER TABLE AppChecklist_tasks ADD COLUMN is_shared BOOLEAN DEFAULT FALSE;
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name = 'appchecklist_tasks' AND column_name = 'deleted_at') THEN
+        ALTER TABLE AppChecklist_tasks ADD COLUMN deleted_at TIMESTAMP NULL;
+      END IF;
     END $$;
   `);
 
@@ -253,6 +257,19 @@ export async function initDatabase() {
     )
   `);
 
+  // Create subtasks table (checklist dentro de cada tarea)
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_subtasks (
+      id SERIAL PRIMARY KEY,
+      task_id INT NOT NULL REFERENCES AppChecklist_tasks(id) ON DELETE CASCADE,
+      title VARCHAR(255) NOT NULL,
+      is_completed BOOLEAN DEFAULT FALSE,
+      sort_order INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Create app usage tracking table for "app_months" achievement
   await query(`
     CREATE TABLE IF NOT EXISTS AppChecklist_app_usage (
@@ -275,6 +292,8 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_tasks_completed_user ON AppChecklist_tasks(is_completed, assigned_to);
     CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON AppChecklist_tasks(completed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tasks_project ON AppChecklist_tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_not_deleted ON AppChecklist_tasks(deleted_at) WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_subtasks_task ON AppChecklist_subtasks(task_id);
     CREATE INDEX IF NOT EXISTS idx_streaks_user ON AppChecklist_streaks(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_achievements ON AppChecklist_user_achievements(user_id);
     CREATE INDEX IF NOT EXISTS idx_projects_archived ON AppChecklist_projects(is_archived);

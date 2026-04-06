@@ -17,12 +17,24 @@ export async function GET(request) {
         u_to.name as assigned_to_name, u_to.avatar_emoji as assigned_to_avatar,
         u_by.name as assigned_by_name, u_by.avatar_emoji as assigned_by_avatar,
         c.name as category_name, c.emoji as category_emoji, c.color as category_color,
-        p.name as project_name, p.emoji as project_emoji, p.color as project_color
+        p.name as project_name, p.emoji as project_emoji, p.color as project_color,
+        COALESCE(subs.subtasks, '[]'::json) as subtasks
       FROM AppChecklist_tasks t
       JOIN AppChecklist_users u_to ON t.assigned_to = u_to.id
       JOIN AppChecklist_users u_by ON t.assigned_by = u_by.id
       LEFT JOIN AppChecklist_categories c ON t.category_id = c.id
       LEFT JOIN AppChecklist_projects p ON t.project_id = p.id
+      LEFT JOIN LATERAL (
+        SELECT json_agg(
+          json_build_object(
+            'id', s.id,
+            'title', s.title,
+            'is_completed', s.is_completed,
+            'sort_order', s.sort_order
+          ) ORDER BY s.sort_order, s.id
+        ) as subtasks
+        FROM AppChecklist_subtasks s WHERE s.task_id = t.id
+      ) subs ON true
     `;
 
     let params = [];
@@ -34,6 +46,9 @@ export async function GET(request) {
       sql += condition;
       whereAdded = true;
     };
+
+    // Excluir tareas soft-deleted siempre
+    addWhere('t.deleted_at IS NULL');
 
     if (userId && filter === 'myTasks') {
       // Include tasks assigned to user OR shared tasks

@@ -105,13 +105,22 @@ export default function Home() {
   const [editingTask, setEditingTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [collapsibleOpen, setCollapsibleOpen] = useState(true);
+  const [lastSeenAssignedByOther, setLastSeenAssignedByOther] = useState(null);
 
-  // Restaurar preferencia del colapsible (default: abierto)
+  // Restaurar preferencia del colapsible (default: abierto) y timestamp de "visto"
   useEffect(() => {
     const saved = localStorage.getItem('collapsibleOpen');
     if (saved !== null) {
       setCollapsibleOpen(saved === 'true');
     }
+    const seen = localStorage.getItem('lastSeenAssignedByOther');
+    setLastSeenAssignedByOther(seen || new Date(0).toISOString());
+  }, []);
+
+  const markAssignedByOtherAsSeen = useCallback(() => {
+    const now = new Date().toISOString();
+    localStorage.setItem('lastSeenAssignedByOther', now);
+    setLastSeenAssignedByOther(now);
   }, []);
 
   const toggleCollapsible = useCallback(() => {
@@ -120,10 +129,15 @@ export default function Home() {
       localStorage.setItem('collapsibleOpen', String(next));
       return next;
     });
-  }, []);
+    // Al abrir, marcar las tareas asignadas como vistas
+    if (!collapsibleOpen) {
+      markAssignedByOtherAsSeen();
+    }
+  }, [collapsibleOpen, markAssignedByOtherAsSeen]);
 
-  // Toast state
+  // Toast state (soporta { message, type, action: { label, onClick } })
   const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
 
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -193,6 +207,9 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('default');
 
+  // Quick add state
+  const [quickAddText, setQuickAddText] = useState('');
+
   // Restaurar preferencia de ordenamiento
   useEffect(() => {
     const saved = localStorage.getItem('sortBy');
@@ -251,9 +268,27 @@ export default function Home() {
   const REACTION_EMOJIS = ['💕', '❤️', '👏', '🎉', '😍'];
 
   // Toast helper function
-  const showToast = useCallback((message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  // options: { duration?: number, action?: { label, onClick } }
+  const showToast = useCallback((message, type = 'success', options = {}) => {
+    const { duration, action = null } = options;
+    const finalDuration = duration ?? (action ? 7000 : 3000);
+
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToast({ message, type, action });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, finalDuration);
+  }, []);
+
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToast(null);
   }, []);
 
   // Get random motivational message
@@ -947,50 +982,73 @@ export default function Home() {
     return outputArray;
   }
 
-  const handleTaskDelete = async (taskId) => {
-    setConfirmDialog({
-      message: '¿Eliminar esta tarea?',
-      onConfirm: async () => {
-        setConfirmDialog(null);
+  const handleUndoDelete = useCallback(async (taskId) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/restore`, { method: 'POST' });
+      if (!response.ok) throw new Error('Server error');
 
-        // Save task for potential rollback
-        const deletedTask = tasks.find(t => t.id === taskId) || assignedByOther.find(t => t.id === taskId) ||
-                           projectTasks.find(t => t.id === taskId) || looseTasks.find(t => t.id === taskId);
-        const previousTasks = tasks;
-        const previousAssignedByOther = assignedByOther;
-        const previousProjectTasks = projectTasks;
-        const previousLooseTasks = looseTasks;
-
-        // Optimistic update - remove from lists immediately
-        setTasks(prev => prev.filter(t => t.id !== taskId));
-        setAssignedByOther(prev => prev.filter(t => t.id !== taskId));
-        setProjectTasks(prev => prev.filter(t => t.id !== taskId));
-        setLooseTasks(prev => prev.filter(t => t.id !== taskId));
-        showToast('Tarea eliminada');
-
-        try {
-          const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-
-          if (!response.ok) {
-            throw new Error('Server error');
-          }
-
-          // Refresh projects to update counts
-          if (activeTab === 'projects') {
-            fetchProjects();
-          }
-        } catch (error) {
-          // Rollback on error
-          console.error('Error deleting task:', error);
-          setTasks(previousTasks);
-          setAssignedByOther(previousAssignedByOther);
-          setProjectTasks(previousProjectTasks);
-          setLooseTasks(previousLooseTasks);
-          showToast('Error al eliminar la tarea', 'error');
+      // Refrescar las listas
+      if (currentUser) {
+        fetchTasks(false);
+        fetchAssignedByOther();
+      }
+      if (activeTab === 'projects') {
+        fetchProjects();
+        if (selectedProject) {
+          fetchProjectTasks(selectedProject);
+        } else {
+          fetchLooseTasks();
         }
-      },
-      onCancel: () => setConfirmDialog(null)
-    });
+      }
+
+      showToast('Tarea restaurada 💕');
+    } catch (error) {
+      console.error('Error restoring task:', error);
+      showToast('Error al deshacer', 'error');
+    }
+  }, [currentUser, activeTab, selectedProject, showToast]);
+
+  const handleTaskDelete = async (taskId) => {
+    // Soft delete + undo: sin confirmDialog, el undo de 7s actúa como red de seguridad.
+    const previousTasks = tasks;
+    const previousAssignedByOther = assignedByOther;
+    const previousProjectTasks = projectTasks;
+    const previousLooseTasks = looseTasks;
+
+    // Optimistic update - remove from lists immediately
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    setAssignedByOther(prev => prev.filter(t => t.id !== taskId));
+    setProjectTasks(prev => prev.filter(t => t.id !== taskId));
+    setLooseTasks(prev => prev.filter(t => t.id !== taskId));
+
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+
+      if (!response.ok) {
+        throw new Error('Server error');
+      }
+
+      showToast('Tarea eliminada', 'success', {
+        duration: 7000,
+        action: {
+          label: 'Deshacer',
+          onClick: () => handleUndoDelete(taskId)
+        }
+      });
+
+      // Refresh projects to update counts
+      if (activeTab === 'projects') {
+        fetchProjects();
+      }
+    } catch (error) {
+      // Rollback on error
+      console.error('Error deleting task:', error);
+      setTasks(previousTasks);
+      setAssignedByOther(previousAssignedByOther);
+      setProjectTasks(previousProjectTasks);
+      setLooseTasks(previousLooseTasks);
+      showToast('Error al eliminar la tarea', 'error');
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -1089,6 +1147,177 @@ export default function Home() {
       showToast('Error al guardar la tarea', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Subtareas: helper para aplicar un cambio a la subtarea de una tarea
+  // dentro de cualquiera de las listas activas (tasks, assignedByOther,
+  // projectTasks, looseTasks).
+  const updateTaskSubtasks = useCallback((taskId, updaterFn) => {
+    const apply = (list) => list.map(t =>
+      t.id === taskId
+        ? { ...t, subtasks: updaterFn(Array.isArray(t.subtasks) ? t.subtasks : []) }
+        : t
+    );
+    setTasks(apply);
+    setAssignedByOther(apply);
+    setProjectTasks(apply);
+    setLooseTasks(apply);
+  }, []);
+
+  const handleSubtaskAdd = useCallback(async (taskId, title) => {
+    if (!title || !title.trim()) return;
+    const trimmed = title.trim();
+
+    // Optimistic con id temporal
+    const tempId = `temp-sub-${Date.now()}`;
+    updateTaskSubtasks(taskId, prev => [
+      ...prev,
+      { id: tempId, title: trimmed, is_completed: false, sort_order: prev.length + 1 }
+    ]);
+
+    try {
+      const res = await fetch('/api/subtasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, title: trimmed }),
+      });
+      if (!res.ok) throw new Error('Server error');
+      const data = await res.json();
+      // Reemplazar id temporal con id real
+      updateTaskSubtasks(taskId, prev => prev.map(s =>
+        s.id === tempId ? { ...s, id: data.subtask.id } : s
+      ));
+    } catch (error) {
+      console.error('Error adding subtask:', error);
+      // Rollback: quitar la subtarea optimista
+      updateTaskSubtasks(taskId, prev => prev.filter(s => s.id !== tempId));
+      showToast('Error al agregar subtarea', 'error');
+    }
+  }, [updateTaskSubtasks, showToast]);
+
+  const handleSubtaskToggle = useCallback(async (taskId, subtaskId) => {
+    // Optimistic
+    updateTaskSubtasks(taskId, prev => prev.map(s =>
+      s.id === subtaskId ? { ...s, is_completed: !s.is_completed } : s
+    ));
+
+    try {
+      const res = await fetch(`/api/subtasks/${subtaskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toggle_complete: true }),
+      });
+      if (!res.ok) throw new Error('Server error');
+    } catch (error) {
+      console.error('Error toggling subtask:', error);
+      // Rollback
+      updateTaskSubtasks(taskId, prev => prev.map(s =>
+        s.id === subtaskId ? { ...s, is_completed: !s.is_completed } : s
+      ));
+      showToast('Error al actualizar subtarea', 'error');
+    }
+  }, [updateTaskSubtasks, showToast]);
+
+  const handleSubtaskDelete = useCallback(async (taskId, subtaskId) => {
+    // Optimistic — guardamos la subtarea por si hay que revertir
+    let removedSubtask = null;
+    updateTaskSubtasks(taskId, prev => {
+      removedSubtask = prev.find(s => s.id === subtaskId);
+      return prev.filter(s => s.id !== subtaskId);
+    });
+
+    try {
+      const res = await fetch(`/api/subtasks/${subtaskId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Server error');
+    } catch (error) {
+      console.error('Error deleting subtask:', error);
+      // Rollback
+      if (removedSubtask) {
+        updateTaskSubtasks(taskId, prev => [...prev, removedSubtask]
+          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+      }
+      showToast('Error al eliminar subtarea', 'error');
+    }
+  }, [updateTaskSubtasks, showToast]);
+
+  // Quick add: crea una tarea con título solamente, sin abrir modal.
+  // Asignación derivada del contexto actual (tab + proyecto seleccionado).
+  const handleQuickAdd = async (e) => {
+    e.preventDefault();
+    const title = quickAddText.trim();
+    if (!title || !currentUser) return;
+
+    let assignedTo = currentUser.id;
+    let projectId = null;
+
+    if (activeTab === 'assignedToOther') {
+      assignedTo = getOtherUser()?.id || currentUser.id;
+    } else if (activeTab === 'projects' && selectedProject) {
+      projectId = selectedProject;
+    }
+
+    const payload = {
+      title,
+      description: null,
+      assigned_to: assignedTo,
+      assigned_by: currentUser.id,
+      due_date: null,
+      priority: 'medium',
+      category_id: null,
+      project_id: projectId,
+      recurrence: null,
+      is_shared: false,
+    };
+
+    const assignedToUser = users.find(u => u.id === assignedTo);
+    const optimisticTask = {
+      id: `temp-${Date.now()}`,
+      ...payload,
+      is_completed: false,
+      completed_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      assigned_to_name: assignedToUser?.name,
+      assigned_to_avatar: assignedToUser?.avatar_emoji,
+      assigned_by_name: currentUser.name,
+      assigned_by_avatar: currentUser.avatar_emoji,
+    };
+
+    // Optimistic update según contexto
+    if (projectId) {
+      setProjectTasks(prev => [optimisticTask, ...prev]);
+    } else {
+      setTasks(prev => [optimisticTask, ...prev]);
+    }
+
+    setQuickAddText('');
+
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Server error');
+      const result = await res.json();
+
+      // Reemplazar temp ID con id real
+      if (result.id) {
+        const replaceId = (list) => list.map(t =>
+          t.id === optimisticTask.id ? { ...t, id: result.id } : t
+        );
+        setTasks(replaceId);
+        setProjectTasks(replaceId);
+      }
+
+      if (activeTab === 'projects') fetchProjects();
+    } catch (error) {
+      console.error('Error en quick add:', error);
+      const removeOpt = (list) => list.filter(t => t.id !== optimisticTask.id);
+      setTasks(removeOpt);
+      setProjectTasks(removeOpt);
+      showToast('Error al agregar tarea', 'error');
     }
   };
 
@@ -1289,11 +1518,29 @@ export default function Home() {
             >
               <div className="collapsible-title">
                 <span>💌 Asignadas por {getOtherUser()?.name}</span>
-                {assignedByOther.filter(t => !t.is_completed).length > 0 && (
-                  <span className="collapsible-badge">
-                    {assignedByOther.filter(t => !t.is_completed).length}
-                  </span>
-                )}
+                {(() => {
+                  const pendingCount = assignedByOther.filter(t => !t.is_completed).length;
+                  const newCount = lastSeenAssignedByOther
+                    ? assignedByOther.filter(t =>
+                        !t.is_completed &&
+                        t.created_at &&
+                        new Date(t.created_at) > new Date(lastSeenAssignedByOther)
+                      ).length
+                    : 0;
+                  if (pendingCount === 0) return null;
+                  return (
+                    <span className="collapsible-badge">
+                      {pendingCount}
+                      {newCount > 0 && (
+                        <span
+                          className="badge-new-dot"
+                          title={`${newCount} ${newCount === 1 ? 'nueva' : 'nuevas'}`}
+                          aria-label={`${newCount} sin ver`}
+                        />
+                      )}
+                    </span>
+                  );
+                })()}
               </div>
               <span className="collapsible-arrow">▼</span>
             </button>
@@ -1312,7 +1559,7 @@ export default function Home() {
                       currentUserId={currentUser?.id}
                       assignedByName={task.assigned_by_name}
                       togglingTaskId={togglingTaskId}
-                      reactionEmojis={REACTION_EMOJIS}
+                      reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
                     />
                   ))}
                 </div>
@@ -1345,41 +1592,67 @@ export default function Home() {
 
         {/* Search & sort toolbar - only for tareas y proyectos */}
         {(activeTab === 'myTasks' || activeTab === 'assignedToOther' || (activeTab === 'projects' && selectedProject)) && (
-          <div className="task-toolbar">
-            <div className="search-input-wrapper">
-              <span className="search-icon" aria-hidden="true">🔍</span>
+          <>
+            <div className="task-toolbar">
+              <div className="search-input-wrapper">
+                <span className="search-icon" aria-hidden="true">🔍</span>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Buscar tareas..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  aria-label="Buscar tareas"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="search-clear"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Limpiar búsqueda"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <select
+                className="sort-select"
+                value={sortBy}
+                onChange={e => updateSortBy(e.target.value)}
+                aria-label="Ordenar tareas"
+              >
+                <option value="default">Por defecto</option>
+                <option value="dueDate">Fecha límite</option>
+                <option value="priority">Prioridad</option>
+                <option value="alphabetical">A-Z</option>
+                <option value="created">Más recientes</option>
+              </select>
+            </div>
+
+            {/* Quick add - input de una línea para crear tarea sin abrir modal */}
+            <form className="quick-add" onSubmit={handleQuickAdd}>
               <input
                 type="text"
-                className="search-input"
-                placeholder="Buscar tareas..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                aria-label="Buscar tareas"
+                className="quick-add-input"
+                placeholder={
+                  activeTab === 'assignedToOther'
+                    ? `Agregar para ${getOtherUser()?.name}...`
+                    : 'Agregar tarea rápida...'
+                }
+                value={quickAddText}
+                onChange={e => setQuickAddText(e.target.value)}
+                aria-label="Agregar tarea rápida"
               />
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="search-clear"
-                  onClick={() => setSearchQuery('')}
-                  aria-label="Limpiar búsqueda"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-            <select
-              className="sort-select"
-              value={sortBy}
-              onChange={e => updateSortBy(e.target.value)}
-              aria-label="Ordenar tareas"
-            >
-              <option value="default">Por defecto</option>
-              <option value="dueDate">Fecha límite</option>
-              <option value="priority">Prioridad</option>
-              <option value="alphabetical">A-Z</option>
-              <option value="created">Más recientes</option>
-            </select>
-          </div>
+              <button
+                type="submit"
+                className="quick-add-btn"
+                disabled={!quickAddText.trim()}
+                aria-label="Agregar"
+              >
+                +
+              </button>
+            </form>
+          </>
         )}
 
         {/* Category Filter - only show for myTasks and assignedToOther */}
@@ -1494,7 +1767,7 @@ export default function Home() {
                             currentUserId={currentUser?.id}
                             assignedByName={task.assigned_by_name}
                             togglingTaskId={togglingTaskId}
-                            reactionEmojis={REACTION_EMOJIS}
+                            reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
                           />
                         ))
                       )}
@@ -1540,7 +1813,7 @@ export default function Home() {
                           currentUserId={currentUser?.id}
                           assignedByName={task.assigned_by_name}
                           togglingTaskId={togglingTaskId}
-                          reactionEmojis={REACTION_EMOJIS}
+                          reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
                         />
                       ))}
                     </div>
@@ -1641,7 +1914,7 @@ export default function Home() {
                     currentUserId={currentUser?.id}
                     assignedByName={task.assigned_by_name}
                     togglingTaskId={togglingTaskId}
-                    reactionEmojis={REACTION_EMOJIS}
+                    reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
                   />
                 ))
               )}
@@ -1909,11 +2182,28 @@ export default function Home() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className={`toast toast-${toast.type}`} role="alert" aria-live="polite">
+        <div
+          className={`toast toast-${toast.type}`}
+          role="alert"
+          aria-live="polite"
+          style={{ '--toast-fade-delay': toast.action ? '6.7s' : '2.7s' }}
+        >
           <span className="toast-icon">
             {toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'}
           </span>
           <span className="toast-message">{toast.message}</span>
+          {toast.action && (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                toast.action.onClick();
+                dismissToast();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       )}
 
@@ -2334,8 +2624,10 @@ function ProjectCard({ project, onSelect, onEdit, onDelete }) {
 }
 
 // TaskCard Component
-function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy, currentUserId, assignedByName, togglingTaskId, reactionEmojis }) {
+function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy, currentUserId, assignedByName, togglingTaskId, reactionEmojis, onSubtaskAdd, onSubtaskToggle, onSubtaskDelete }) {
   const [showReactions, setShowReactions] = useState(false);
+  const [showSubtasks, setShowSubtasks] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
@@ -2351,6 +2643,21 @@ function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy
 
   // Can react if: task is completed AND was assigned by current user to the other person
   const canReact = !!task.is_completed && task.assigned_by === currentUserId && task.assigned_to !== currentUserId;
+
+  // Subtareas
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  const completedSubtasks = subtasks.filter(s => s.is_completed).length;
+  const totalSubtasks = subtasks.length;
+  const hasSubtasks = totalSubtasks > 0;
+
+  const handleSubtaskFormSubmit = (e) => {
+    e.preventDefault();
+    const title = newSubtaskTitle.trim();
+    if (!title) return;
+    onSubtaskAdd?.(task.id, title);
+    setNewSubtaskTitle('');
+    setShowSubtasks(true);
+  };
 
   return (
     <div className={`task-card ${task.is_completed ? 'completed' : ''} priority-${task.priority} ${fromClass}`}>
@@ -2404,7 +2711,81 @@ function TaskCard({ task, onToggle, onEdit, onDelete, onReaction, showAssignedBy
               {task.priority === 'high' ? '🔴' : task.priority === 'low' ? '🔵' : '🟡'}
               {task.priority === 'high' ? 'Alta' : task.priority === 'low' ? 'Baja' : 'Media'}
             </span>
+            {hasSubtasks && (
+              <button
+                type="button"
+                className="task-meta-item subtasks-toggle"
+                onClick={() => setShowSubtasks(s => !s)}
+                aria-expanded={showSubtasks}
+                aria-label={`${completedSubtasks} de ${totalSubtasks} subtareas completadas`}
+              >
+                ☑ {completedSubtasks}/{totalSubtasks}
+                <span className="subtasks-arrow">{showSubtasks ? '▾' : '▸'}</span>
+              </button>
+            )}
+            {!hasSubtasks && !showSubtasks && !task.is_completed && onSubtaskAdd && (
+              <button
+                type="button"
+                className="task-meta-item subtasks-add-trigger"
+                onClick={() => setShowSubtasks(true)}
+                aria-label="Agregar pasos"
+              >
+                + Pasos
+              </button>
+            )}
           </div>
+
+          {/* Subtareas (lista + input) cuando expandidas */}
+          {showSubtasks && onSubtaskAdd && (
+            <div className="subtasks-section">
+              {hasSubtasks && (
+                <ul className="subtasks-list">
+                  {subtasks.map(sub => (
+                    <li key={sub.id} className={`subtask-item ${sub.is_completed ? 'completed' : ''}`}>
+                      <button
+                        type="button"
+                        className={`subtask-checkbox ${sub.is_completed ? 'checked' : ''}`}
+                        onClick={() => onSubtaskToggle?.(task.id, sub.id)}
+                        role="checkbox"
+                        aria-checked={sub.is_completed}
+                        aria-label={`Marcar "${sub.title}" como ${sub.is_completed ? 'pendiente' : 'completada'}`}
+                      />
+                      <span className="subtask-title">{sub.title}</span>
+                      <button
+                        type="button"
+                        className="subtask-delete"
+                        onClick={() => onSubtaskDelete?.(task.id, sub.id)}
+                        aria-label={`Eliminar subtarea "${sub.title}"`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!task.is_completed && (
+                <form className="subtask-add-form" onSubmit={handleSubtaskFormSubmit}>
+                  <input
+                    type="text"
+                    className="subtask-add-input"
+                    placeholder="Agregar paso..."
+                    value={newSubtaskTitle}
+                    onChange={e => setNewSubtaskTitle(e.target.value)}
+                    aria-label="Nueva subtarea"
+                    autoFocus={!hasSubtasks}
+                  />
+                  <button
+                    type="submit"
+                    className="subtask-add-btn"
+                    disabled={!newSubtaskTitle.trim()}
+                    aria-label="Agregar subtarea"
+                  >
+                    +
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Reaction buttons for completed tasks assigned by current user */}
           {canReact && !task.reaction && (
