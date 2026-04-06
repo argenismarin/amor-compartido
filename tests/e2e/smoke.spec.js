@@ -12,9 +12,11 @@ test.describe('Smoke', () => {
     // Header con el título
     await expect(page.getByText('Amor Compartido')).toBeVisible();
 
-    // Toggle de usuarios (Jenifer y Argenis)
-    await expect(page.getByRole('button', { name: /Jenifer/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Argenis/i })).toBeVisible();
+    // Toggle de usuarios — el regex /Argenis/i también matchearía el tab
+    // "Para Argenis", así que filtramos por la clase .user-btn
+    const userButtons = page.locator('.user-btn');
+    await expect(userButtons.filter({ hasText: 'Jenifer' })).toBeVisible();
+    await expect(userButtons.filter({ hasText: 'Argenis' })).toBeVisible();
 
     // Los 3 tabs
     await expect(page.getByRole('button', { name: /Mis Tareas/i })).toBeVisible();
@@ -36,12 +38,14 @@ test.describe('Smoke', () => {
     const root = page.locator('[data-user]').first();
     await expect(root).toHaveAttribute('data-user', 'jenifer');
 
-    // Click en Argenis
-    await page.getByRole('button', { name: /Argenis/i }).click();
+    const userButtons = page.locator('.user-btn');
+
+    // Click en Argenis (filtrado por .user-btn para no matchear el tab)
+    await userButtons.filter({ hasText: 'Argenis' }).click();
     await expect(root).toHaveAttribute('data-user', 'argenis');
 
     // Volver a Jenifer
-    await page.getByRole('button', { name: /Jenifer/i }).click();
+    await userButtons.filter({ hasText: 'Jenifer' }).click();
     await expect(root).toHaveAttribute('data-user', 'jenifer');
   });
 });
