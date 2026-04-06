@@ -80,4 +80,36 @@ npm run build           # build de producción
 npm run start           # servidor de producción
 npm run lint            # ESLint
 npm run generate-vapid  # genera VAPID keys nuevas
+npm run test:e2e        # tests E2E con Playwright (headless)
+npm run test:e2e:ui     # tests E2E con UI interactiva
 ```
+
+## Tests E2E
+
+Los tests viven en `tests/e2e/` y usan **Playwright** con mocks de las API
+routes (`tests/e2e/helpers/mockApi.js`). Esto significa que NO necesitan
+una BD para correr — el state vive en memoria por test y `page.route()`
+intercepta todas las llamadas a `/api/*`.
+
+```bash
+# Correr todos los tests
+npm run test:e2e
+
+# UI interactiva (recomendado para debug)
+npm run test:e2e:ui
+
+# Un test específico
+npx playwright test smoke.spec.js
+```
+
+La primera vez hay que descargar los browsers de Playwright:
+
+```bash
+npx playwright install --with-deps chromium
+```
+
+### CI
+
+Cada push a `master` y cada PR dispara `.github/workflows/test.yml` que corre
+ESLint + los tests E2E en Ubuntu con Chromium. El workflow falla si algún
+test falla y sube el reporte HTML como artifact.
