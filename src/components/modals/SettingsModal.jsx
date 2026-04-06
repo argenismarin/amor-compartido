@@ -1,3 +1,5 @@
+import useFocusTrap from '@/hooks/useFocusTrap';
+
 // Modal de configuración: notificaciones, fechas especiales y stats.
 //
 // Props:
@@ -24,9 +26,17 @@ export default function SettingsModal({
   onSaveSpecialDate,
   onClose,
 }) {
+  const containerRef = useFocusTrap(onClose);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal settings-modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="modal settings-modal"
+        ref={containerRef}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-header">
           <h2 className="modal-title">⚙️ Configuracion</h2>
           <button className="modal-close" onClick={onClose}>×</button>

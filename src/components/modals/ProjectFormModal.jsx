@@ -1,4 +1,5 @@
 import DateInputWithShortcuts from '@/components/DateInputWithShortcuts';
+import useFocusTrap from '@/hooks/useFocusTrap';
 
 const PROJECT_EMOJIS = ['📁', '🚀', '💼', '🏠', '🎯', '💡', '🎨', '📱', '💻', '🛒', '✈️', '🎁', '📚', '🏋️', '🎵'];
 const PROJECT_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'];
@@ -20,9 +21,17 @@ export default function ProjectFormModal({
   onSubmit,
   onClose,
 }) {
+  const containerRef = useFocusTrap(onClose);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="modal"
+        ref={containerRef}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-header">
           <h2 className="modal-title">
             {editingProject ? '✏️ Editar proyecto' : '📁 Nuevo proyecto'}

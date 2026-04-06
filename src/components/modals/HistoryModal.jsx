@@ -1,4 +1,5 @@
 import { formatDateTimeDisplay } from '@/lib/dates';
+import useFocusTrap from '@/hooks/useFocusTrap';
 
 // Modal con el historial de tareas completadas y stats semanales.
 //
@@ -6,9 +7,17 @@ import { formatDateTimeDisplay } from '@/lib/dates';
 // - history: { tasks: [], stats: { thisWeek, total } }
 // - onClose: cerrar el modal
 export default function HistoryModal({ history, onClose }) {
+  const containerRef = useFocusTrap(onClose);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal history-modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="modal history-modal"
+        ref={containerRef}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-header">
           <h2 className="modal-title">📜 Historial</h2>
           <button className="modal-close" onClick={onClose}>×</button>

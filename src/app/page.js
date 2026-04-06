@@ -64,8 +64,8 @@ export default function Home() {
     }
   }, [collapsibleOpen, markAssignedByOtherAsSeen]);
 
-  // Toast state via custom hook (soporta acción opcional con auto-dismiss)
-  const { toast, showToast, dismissToast } = useToast();
+  // Toast state via custom hook (soporta acción, pausa on hover, cierre manual)
+  const { toast, showToast, dismissToast, pauseTimer, resumeTimer } = useToast();
 
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -1744,9 +1744,14 @@ export default function Home() {
         />
       )}
 
-      <Toast toast={toast} onDismiss={dismissToast} />
+      <Toast
+        toast={toast}
+        onDismiss={dismissToast}
+        onPause={pauseTimer}
+        onResume={resumeTimer}
+      />
 
-      <ConfirmDialog dialog={confirmDialog} />
+      {confirmDialog && <ConfirmDialog dialog={confirmDialog} />}
 
       <CelebrationOverlay
         floatingHearts={floatingHearts}

@@ -1,4 +1,5 @@
 import DateInputWithShortcuts from '@/components/DateInputWithShortcuts';
+import useFocusTrap from '@/hooks/useFocusTrap';
 
 // Modal de crear / editar tarea con todos los selectores (asignar, prioridad,
 // proyecto, categoría, recurrencia, fecha límite).
@@ -26,9 +27,17 @@ export default function TaskFormModal({
   onSubmit,
   onClose,
 }) {
+  const containerRef = useFocusTrap(onClose);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="modal"
+        ref={containerRef}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-header">
           <h2 className="modal-title">
             {editingTask ? '✏️ Editar tarea' : '✨ Nueva tarea'}

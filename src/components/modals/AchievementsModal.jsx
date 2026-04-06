@@ -1,4 +1,5 @@
 import { formatDateDisplay } from '@/lib/dates';
+import useFocusTrap from '@/hooks/useFocusTrap';
 
 // Modal con la lista completa de logros y stats de gamificación.
 //
@@ -7,9 +8,17 @@ import { formatDateDisplay } from '@/lib/dates';
 // - streak: { current_streak, best_streak }
 // - onClose: cerrar el modal
 export default function AchievementsModal({ achievements, streak, onClose }) {
+  const containerRef = useFocusTrap(onClose);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal achievements-modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="modal achievements-modal"
+        ref={containerRef}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-header">
           <h2 className="modal-title">🏆 Logros</h2>
           <button className="modal-close" onClick={onClose}>×</button>
