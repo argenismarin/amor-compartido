@@ -325,7 +325,6 @@ export default function Home() {
   // Carga inicial de categories/projects/archivedProjects al montar.
   // Las funciones tienen que estar declaradas ANTES del useEffect (Next 16
   // tiene una regla react-hooks/immutability que valida esto).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchCategories();
     fetchProjects();
