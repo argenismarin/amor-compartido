@@ -126,92 +126,6 @@ export async function initDatabase() {
     END $$;
   `);
 
-  // C5: Normalizar is_completed y is_archived a BOOLEAN puro.
-  // Heredado de la migración MySQL→Postgres: algunas instalaciones tenían
-  // estas columnas como SMALLINT (0/1). Convertir a BOOLEAN si es necesario.
-  //
-  // Wrap en try/catch porque el código de runtime es compatible con ambos
-  // tipos (boolean y smallint), así que un fallo de migración no debería
-  // tirar abajo la app entera. Solo logueamos para debug.
-  try {
-    await query(`
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'appchecklist_tasks'
-            AND column_name = 'is_completed'
-            AND data_type IN ('smallint', 'integer')
-        ) THEN
-          ALTER TABLE AppChecklist_tasks
-            ALTER COLUMN is_completed DROP DEFAULT,
-            ALTER COLUMN is_completed TYPE BOOLEAN USING (is_completed::boolean),
-            ALTER COLUMN is_completed SET DEFAULT FALSE;
-        END IF;
-
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'appchecklist_projects'
-            AND column_name = 'is_archived'
-            AND data_type IN ('smallint', 'integer')
-        ) THEN
-          ALTER TABLE AppChecklist_projects
-            ALTER COLUMN is_archived DROP DEFAULT,
-            ALTER COLUMN is_archived TYPE BOOLEAN USING (is_archived::boolean),
-            ALTER COLUMN is_archived SET DEFAULT FALSE;
-        END IF;
-      END $$;
-    `);
-  } catch (err) {
-    console.error('[db] C5 boolean migration failed (non-fatal):', err.message);
-  }
-
-  // C4: Foreign keys explícitas para category_id y project_id en tasks.
-  // Igual que C5: si falla, no rompemos la app. La app funciona sin las FKs
-  // explícitas (era el comportamiento original).
-  try {
-    await query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.table_constraints
-          WHERE constraint_name = 'appchecklist_tasks_category_id_fkey'
-            AND table_name = 'appchecklist_tasks'
-        ) THEN
-          UPDATE AppChecklist_tasks
-          SET category_id = NULL
-          WHERE category_id IS NOT NULL
-            AND category_id NOT IN (SELECT id FROM AppChecklist_categories);
-
-          ALTER TABLE AppChecklist_tasks
-            ADD CONSTRAINT appchecklist_tasks_category_id_fkey
-            FOREIGN KEY (category_id)
-            REFERENCES AppChecklist_categories(id)
-            ON DELETE SET NULL;
-        END IF;
-
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.table_constraints
-          WHERE constraint_name = 'appchecklist_tasks_project_id_fkey'
-            AND table_name = 'appchecklist_tasks'
-        ) THEN
-          UPDATE AppChecklist_tasks
-          SET project_id = NULL
-          WHERE project_id IS NOT NULL
-            AND project_id NOT IN (SELECT id FROM AppChecklist_projects);
-
-          ALTER TABLE AppChecklist_tasks
-            ADD CONSTRAINT appchecklist_tasks_project_id_fkey
-            FOREIGN KEY (project_id)
-            REFERENCES AppChecklist_projects(id)
-            ON DELETE SET NULL;
-        END IF;
-      END $$;
-    `);
-  } catch (err) {
-    console.error('[db] C4 FK migration failed (non-fatal):', err.message);
-  }
-
   // Create streaks table for gamification
   await query(`
     CREATE TABLE IF NOT EXISTS AppChecklist_streaks (
@@ -377,6 +291,93 @@ export async function initDatabase() {
   const existingUsage = await query('SELECT id FROM AppChecklist_app_usage');
   if (existingUsage.length === 0) {
     await query('INSERT INTO AppChecklist_app_usage (first_use) VALUES (CURRENT_DATE)');
+  }
+
+  // C5: Normalizar is_completed y is_archived a BOOLEAN puro.
+  // Heredado de la migración MySQL→Postgres: algunas instalaciones tenían
+  // estas columnas como SMALLINT (0/1). Convertir a BOOLEAN si es necesario.
+  //
+  // Esta migración corre AL FINAL para garantizar que las tablas existen.
+  // Wrap en try/catch porque el código de runtime es compatible con ambos
+  // tipos (boolean y smallint), así que un fallo de migración no rompe nada.
+  try {
+    await query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'appchecklist_tasks'
+            AND column_name = 'is_completed'
+            AND data_type IN ('smallint', 'integer')
+        ) THEN
+          ALTER TABLE AppChecklist_tasks
+            ALTER COLUMN is_completed DROP DEFAULT,
+            ALTER COLUMN is_completed TYPE BOOLEAN USING (is_completed::boolean),
+            ALTER COLUMN is_completed SET DEFAULT FALSE;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'appchecklist_projects'
+            AND column_name = 'is_archived'
+            AND data_type IN ('smallint', 'integer')
+        ) THEN
+          ALTER TABLE AppChecklist_projects
+            ALTER COLUMN is_archived DROP DEFAULT,
+            ALTER COLUMN is_archived TYPE BOOLEAN USING (is_archived::boolean),
+            ALTER COLUMN is_archived SET DEFAULT FALSE;
+        END IF;
+      END $$;
+    `);
+  } catch (err) {
+    console.error('[db] C5 boolean migration failed (non-fatal):', err.message);
+  }
+
+  // C4: Foreign keys explícitas para category_id y project_id en tasks.
+  // CRÍTICO: este bloque referencia AppChecklist_categories y
+  // AppChecklist_projects, así que tiene que correr DESPUÉS de que esas
+  // tablas existan (de ahí su posición al final de initDatabase).
+  try {
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'appchecklist_tasks_category_id_fkey'
+            AND table_name = 'appchecklist_tasks'
+        ) THEN
+          UPDATE AppChecklist_tasks
+          SET category_id = NULL
+          WHERE category_id IS NOT NULL
+            AND category_id NOT IN (SELECT id FROM AppChecklist_categories);
+
+          ALTER TABLE AppChecklist_tasks
+            ADD CONSTRAINT appchecklist_tasks_category_id_fkey
+            FOREIGN KEY (category_id)
+            REFERENCES AppChecklist_categories(id)
+            ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'appchecklist_tasks_project_id_fkey'
+            AND table_name = 'appchecklist_tasks'
+        ) THEN
+          UPDATE AppChecklist_tasks
+          SET project_id = NULL
+          WHERE project_id IS NOT NULL
+            AND project_id NOT IN (SELECT id FROM AppChecklist_projects);
+
+          ALTER TABLE AppChecklist_tasks
+            ADD CONSTRAINT appchecklist_tasks_project_id_fkey
+            FOREIGN KEY (project_id)
+            REFERENCES AppChecklist_projects(id)
+            ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+  } catch (err) {
+    console.error('[db] C4 FK migration failed (non-fatal):', err.message);
   }
 
   // Create indexes for optimized queries
