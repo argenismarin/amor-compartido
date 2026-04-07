@@ -1,19 +1,18 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
+import { createSubtaskSchema, validateBody } from '@/lib/validation/schemas';
 
 // POST /api/subtasks — crear subtarea
 // body: { task_id, title }
 export async function POST(request) {
   try {
     await ensureDatabase();
-    const { task_id, title } = await request.json();
-
-    if (!task_id || !title || !title.trim()) {
-      return NextResponse.json(
-        { error: 'task_id and title are required' },
-        { status: 400 }
-      );
+    const body = await request.json();
+    const { data, error } = validateBody(createSubtaskSchema, body);
+    if (error) {
+      return NextResponse.json({ error }, { status: 400 });
     }
+    const { task_id, title } = data;
 
     // Calcular el siguiente sort_order
     const maxOrder = await queryOne(
@@ -25,7 +24,7 @@ export async function POST(request) {
     const result = await queryOne(
       `INSERT INTO AppChecklist_subtasks (task_id, title, sort_order)
        VALUES ($1, $2, $3) RETURNING id, task_id, title, is_completed, sort_order`,
-      [task_id, title.trim(), nextOrder]
+      [task_id, title, nextOrder]
     );
 
     return NextResponse.json({ success: true, subtask: result });

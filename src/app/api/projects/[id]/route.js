@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
+import { updateProjectSchema, validateBody } from '@/lib/validation/schemas';
 
 // La tabla AppChecklist_projects se crea en initDatabase() / ensureDatabase().
 // No hace falta una función extra acá.
@@ -35,7 +36,12 @@ export async function PUT(request, { params }) {
   try {
     await ensureDatabase();
     const { id } = await params;
-    const { name, description, emoji, color, due_date, is_archived } = await request.json();
+    const body = await request.json();
+    const { data, error } = validateBody(updateProjectSchema, body);
+    if (error) {
+      return NextResponse.json({ error }, { status: 400 });
+    }
+    const { name, description, emoji, color, due_date, is_archived } = data;
 
     const updates = [];
     const values = [];
@@ -43,7 +49,7 @@ export async function PUT(request, { params }) {
 
     if (name !== undefined) {
       updates.push(`name = $${paramIndex}`);
-      values.push(name.trim());
+      values.push(name);
       paramIndex++;
     }
 

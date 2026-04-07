@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
+import { createProjectSchema, validateBody } from '@/lib/validation/schemas';
 
 // La tabla AppChecklist_projects y la columna project_id en tasks se crean
 // en initDatabase() / ensureDatabase(). No hace falta una función extra acá.
@@ -37,16 +38,17 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     await ensureDatabase();
-    const { name, description, emoji, color, due_date } = await request.json();
-
-    if (!name || name.trim() === '') {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    const body = await request.json();
+    const { data, error } = validateBody(createProjectSchema, body);
+    if (error) {
+      return NextResponse.json({ error }, { status: 400 });
     }
+    const { name, description, emoji, color, due_date } = data;
 
     const result = await queryOne(
       `INSERT INTO AppChecklist_projects (name, description, emoji, color, due_date)
        VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [name.trim(), description || null, emoji || '📁', color || '#6366f1', due_date || null]
+      [name, description || null, emoji, color, due_date || null]
     );
 
     return NextResponse.json({ success: true, id: result.id });

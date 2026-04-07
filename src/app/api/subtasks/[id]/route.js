@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import {
+  toggleSubtaskSchema,
+  updateSubtaskSchema,
+  validateBody,
+} from '@/lib/validation/schemas';
 
 // PUT /api/subtasks/[id] — actualizar subtarea
 // body: { toggle_complete: true } o { title: '...' }
@@ -8,7 +13,11 @@ export async function PUT(request, { params }) {
     const { id } = await params;
     const body = await request.json();
 
-    if (body.toggle_complete) {
+    if (body.toggle_complete !== undefined) {
+      const validation = validateBody(toggleSubtaskSchema, body);
+      if (validation.error) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
       await query(
         `UPDATE AppChecklist_subtasks
          SET is_completed = NOT is_completed, updated_at = NOW()
@@ -18,10 +27,14 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ success: true });
     }
 
-    if (typeof body.title === 'string' && body.title.trim()) {
+    if (body.title !== undefined) {
+      const validation = validateBody(updateSubtaskSchema, body);
+      if (validation.error) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
       await query(
         'UPDATE AppChecklist_subtasks SET title = $1, updated_at = NOW() WHERE id = $2',
-        [body.title.trim(), id]
+        [validation.data.title, id]
       );
       return NextResponse.json({ success: true });
     }

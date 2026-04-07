@@ -98,8 +98,13 @@ export default function TaskCard({
             {task.due_date && (
               <span className="task-meta-item">📅 {formatDateDisplay(task.due_date)}</span>
             )}
-            <span className="task-meta-item">
-              {task.priority === 'high' ? '🔴' : task.priority === 'low' ? '🔵' : '🟡'}
+            <span
+              className={`task-meta-item priority-meta priority-meta-${task.priority}`}
+              aria-label={`Prioridad ${task.priority === 'high' ? 'alta' : task.priority === 'low' ? 'baja' : 'media'}`}
+            >
+              <span aria-hidden="true">
+                {task.priority === 'high' ? '▲' : task.priority === 'low' ? '▼' : '─'}
+              </span>
               {task.priority === 'high' ? 'Alta' : task.priority === 'low' ? 'Baja' : 'Media'}
             </span>
             {hasSubtasks && (

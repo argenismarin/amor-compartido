@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
 import { sendPushToUser } from '@/lib/push';
+import { createTaskSchema, validateBody } from '@/lib/validation/schemas';
 
 export async function GET(request) {
   try {
@@ -99,7 +100,15 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days, is_shared } = await request.json();
+    const body = await request.json();
+    const { data, error } = validateBody(createTaskSchema, body);
+    if (error) {
+      return NextResponse.json({ error }, { status: 400 });
+    }
+    const {
+      title, description, assigned_to, assigned_by, due_date, priority,
+      category_id, project_id, recurrence, recurrence_days, is_shared,
+    } = data;
 
     const result = await queryOne(
       `INSERT INTO AppChecklist_tasks (title, description, assigned_to, assigned_by, due_date, priority, category_id, project_id, recurrence, recurrence_days, is_shared)

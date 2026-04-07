@@ -109,19 +109,23 @@ export default function TaskFormModal({
           <div className="form-group">
             <label className="form-label">Prioridad</label>
             <div className="priority-selector" role="radiogroup" aria-label="Seleccionar prioridad">
-              {['low', 'medium', 'high'].map(p => (
-                <button
-                  type="button"
-                  key={p}
-                  className={`priority-option ${p} ${formData.priority === p ? 'selected' : ''}`}
-                  onClick={() => setFormData({...formData, priority: p})}
-                  role="radio"
-                  aria-checked={formData.priority === p}
-                  aria-label={`Prioridad ${p === 'low' ? 'baja' : p === 'medium' ? 'media' : 'alta'}`}
-                >
-                  {p === 'low' ? '🔵 Baja' : p === 'medium' ? '🟡 Media' : '🔴 Alta'}
-                </button>
-              ))}
+              {['low', 'medium', 'high'].map(p => {
+                const symbol = p === 'low' ? '▼' : p === 'medium' ? '─' : '▲';
+                const label = p === 'low' ? 'Baja' : p === 'medium' ? 'Media' : 'Alta';
+                return (
+                  <button
+                    type="button"
+                    key={p}
+                    className={`priority-option ${p} ${formData.priority === p ? 'selected' : ''}`}
+                    onClick={() => setFormData({...formData, priority: p})}
+                    role="radio"
+                    aria-checked={formData.priority === p}
+                    aria-label={`Prioridad ${label.toLowerCase()}`}
+                  >
+                    <span aria-hidden="true">{symbol}</span> {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

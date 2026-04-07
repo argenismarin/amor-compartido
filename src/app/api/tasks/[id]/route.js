@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { sendPushToUser } from '@/lib/push';
 import { getBogotaDate, getTodayBogota, getYesterdayBogota } from '@/lib/timezone';
+import {
+  toggleTaskSchema,
+  reactionTaskSchema,
+  updateTaskSchema,
+  validateBody,
+} from '@/lib/validation/schemas';
 
 // Helper: Calcula la siguiente fecha límite para una tarea recurrente.
 // Si la tarea tenía due_date, suma desde ahí; si no, desde hoy.
@@ -42,6 +48,10 @@ export async function PUT(request, { params }) {
 
     if (body.toggle_complete !== undefined) {
       // Toggle completion status
+      const validation = validateBody(toggleTaskSchema, body);
+      if (validation.error) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
       const task = await queryOne('SELECT * FROM AppChecklist_tasks WHERE id = $1', [id]);
 
       if (!task) {
@@ -105,9 +115,13 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ success: true, completed: newCompletedStatus ? true : false });
     } else if (body.reaction !== undefined) {
       // Update reaction
+      const validation = validateBody(reactionTaskSchema, body);
+      if (validation.error) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
       await query(
         `UPDATE AppChecklist_tasks SET reaction = $1, updated_at = NOW() WHERE id = $2`,
-        [body.reaction || null, id]
+        [validation.data.reaction || null, id]
       );
 
       // Notificar al usuario que completó la tarea de la reacción recibida
@@ -138,11 +152,15 @@ export async function PUT(request, { params }) {
       // Update task details — con optimistic locking si el cliente envía
       // expected_updated_at. Esto previene que un usuario sobrescriba los
       // cambios de su pareja en silencio.
+      const validation = validateBody(updateTaskSchema, body);
+      if (validation.error) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
       const {
         title, description, assigned_to, due_date, priority,
         category_id, project_id, recurrence, recurrence_days, is_shared,
         expected_updated_at,
-      } = body;
+      } = validation.data;
 
       let updated;
       if (expected_updated_at) {
