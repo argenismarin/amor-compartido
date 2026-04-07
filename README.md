@@ -113,3 +113,36 @@ npx playwright install --with-deps chromium
 Cada push a `master` y cada PR dispara `.github/workflows/test.yml` que corre
 ESLint + los tests E2E en Ubuntu con Chromium. El workflow falla si algún
 test falla y sube el reporte HTML como artifact.
+
+## Error tracking con Sentry (opcional)
+
+El repo viene con `@sentry/nextjs` ya integrado, pero **es no-op por defecto**:
+si no configurás `SENTRY_DSN`, no reporta nada y no afecta el funcionamiento.
+
+Para activarlo:
+
+1. Crear cuenta gratis en https://sentry.io (5K errores/mes incluidos).
+2. Crear un proyecto tipo "Next.js". Sentry te da un DSN.
+3. En Vercel → Project Settings → Environment Variables, agregar:
+   - `SENTRY_DSN` (server-side, secreto)
+   - `NEXT_PUBLIC_SENTRY_DSN` (cliente, mismo valor que el de arriba — es público)
+4. Trigger un redeploy en Vercel para que tome las env vars.
+5. (Opcional) Para subir source maps automáticamente y ver stack traces con
+   código original en lugar de minified, agregar también:
+   - `SENTRY_ORG`
+   - `SENTRY_PROJECT`
+   - `SENTRY_AUTH_TOKEN` (crear en Sentry → Settings → Auth Tokens, scope `project:releases`)
+
+Una vez activado, Sentry captura automáticamente:
+- **Errores no manejados** del cliente (excepciones JS, fallos de fetch)
+- **Errores de las API routes** (cualquier throw que no esté en un try/catch)
+- **10% de las requests** como traces de performance (para una app de 2 usuarios alcanza)
+
+Los archivos de configuración están en la raíz del proyecto:
+- `sentry.client.config.js` — runtime del browser
+- `sentry.server.config.js` — runtime de las API routes (Node.js)
+- `sentry.edge.config.js` — runtime edge (no usado actualmente)
+- `instrumentation.js` — hook de Next que carga server/edge configs
+
+Para ajustar el `tracesSampleRate` o filtrar errores específicos, editar
+los archivos `sentry.*.config.js`.
