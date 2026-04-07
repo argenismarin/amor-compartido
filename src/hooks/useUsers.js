@@ -38,7 +38,6 @@ export default function useUsers(showToast) {
   // porque fetchUsers internamente llama a setState, pero ese es el patrón
   // estándar de "load data on mount" en componentes cliente sin RSC.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
   }, [fetchUsers]);
 

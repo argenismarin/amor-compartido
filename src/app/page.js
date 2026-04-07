@@ -44,11 +44,9 @@ export default function Home() {
   useEffect(() => {
     const saved = localStorage.getItem('collapsibleOpen');
     if (saved !== null) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsibleOpen(saved === 'true');
     }
     const seen = localStorage.getItem('lastSeenAssignedByOther');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLastSeenAssignedByOther(seen || new Date(0).toISOString());
   }, []);
 
@@ -123,7 +121,6 @@ export default function Home() {
   // Restaurar preferencia de ordenamiento
   useEffect(() => {
     const saved = localStorage.getItem('sortBy');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved) setSortBy(saved);
   }, []);
 
@@ -329,11 +326,8 @@ export default function Home() {
   // Las funciones tienen que estar declaradas ANTES del useEffect (Next 16
   // tiene una regla react-hooks/immutability que valida esto).
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCategories();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProjects();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchArchivedProjects();
   }, []);
 
@@ -420,9 +414,7 @@ export default function Home() {
   // Celebrate 100% progress
   useEffect(() => {
     if (progressPercentage === 100 && prevProgressRef.current !== 100 && totalTasks > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       triggerConfetti();
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       showCelebrationBanner('¡100% Completado!', '¡Felicidades, lo lograron! 🎉');
     }
     prevProgressRef.current = progressPercentage;
@@ -431,7 +423,6 @@ export default function Home() {
   // Celebrate when a new achievement is unlocked (gestionado por useAchievements)
   useEffect(() => {
     if (newAchievement) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       triggerConfetti();
     }
   }, [newAchievement, triggerConfetti]);
