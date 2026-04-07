@@ -101,6 +101,75 @@ export const updateSubtaskSchema = z.object({
   title: trimmedString(255),
 });
 
+// ─── Import / Export ────────────────────────────────────────────────
+
+// Schema del payload que acepta POST /api/import. Es el mismo formato
+// que devuelve /api/export, así que un usuario puede re-importar sus
+// backups. Los IDs del payload son "antiguos" — el endpoint los mapea
+// a nuevos al insertar.
+export const importPayloadSchema = z.object({
+  version: z.number().int(),
+  exportedAt: z.string().optional(),
+  tasks: z
+    .array(
+      z.object({
+        id: z.number().int().optional(),
+        title: z.string().min(1).max(255),
+        description: z.string().nullable().optional(),
+        assigned_to: z.number().int(),
+        assigned_by: z.number().int(),
+        is_completed: z.boolean().optional().default(false),
+        completed_at: z.string().nullable().optional(),
+        due_date: z.string().nullable().optional(),
+        priority: priorityEnum.optional().default('medium'),
+        reaction: z.string().nullable().optional(),
+        category_id: z.number().int().nullable().optional(),
+        project_id: z.number().int().nullable().optional(),
+        recurrence: recurrenceEnum.nullable().optional(),
+        recurrence_days: z.string().nullable().optional(),
+        is_shared: z.boolean().optional().default(false),
+        deleted_at: z.string().nullable().optional(),
+        subtasks: z
+          .array(
+            z.object({
+              title: z.string().min(1).max(255),
+              is_completed: z.boolean().optional().default(false),
+              sort_order: z.number().int().optional().default(0),
+            })
+          )
+          .optional()
+          .default([]),
+      })
+    )
+    .optional()
+    .default([]),
+  projects: z
+    .array(
+      z.object({
+        id: z.number().int().optional(),
+        name: z.string().min(1).max(100),
+        description: z.string().nullable().optional(),
+        emoji: z.string().max(10).optional().default('📁'),
+        color: z.string().max(20).optional().default('#6366f1'),
+        due_date: z.string().nullable().optional(),
+        is_archived: z.boolean().optional().default(false),
+      })
+    )
+    .optional()
+    .default([]),
+  specialDates: z
+    .array(
+      z.object({
+        type: z.string().max(50),
+        date: z.string(),
+        user_id: z.number().int().nullable().optional(),
+        label: z.string().nullable().optional(),
+      })
+    )
+    .optional()
+    .default([]),
+});
+
 // ─── Subscribe ──────────────────────────────────────────────────────
 
 export const subscribeSchema = z.object({

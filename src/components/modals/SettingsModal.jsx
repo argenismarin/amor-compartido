@@ -1,6 +1,6 @@
 import useFocusTrap from '@/hooks/useFocusTrap';
 
-// Modal de configuración: notificaciones, fechas especiales y stats.
+// Modal de configuración: notificaciones, fechas especiales, stats y datos.
 //
 // Props:
 // - users: lista de usuarios para los cumpleaños
@@ -12,6 +12,8 @@ import useFocusTrap from '@/hooks/useFocusTrap';
 // - notificationPermission: 'default' | 'granted' | 'denied'
 // - onEnableNotifications, onDisableNotifications: handlers de push
 // - onSaveSpecialDate: (type, date, userId, label) => void
+// - onExportData: () => void — descarga JSON con todos los datos
+// - onImportData: (file: File) => void — importa desde un archivo JSON
 // - onClose: cerrar el modal
 export default function SettingsModal({
   users,
@@ -24,6 +26,8 @@ export default function SettingsModal({
   onEnableNotifications,
   onDisableNotifications,
   onSaveSpecialDate,
+  onExportData,
+  onImportData,
   onClose,
 }) {
   const containerRef = useFocusTrap(onClose);
@@ -139,6 +143,43 @@ export default function SettingsModal({
               </div>
             )}
           </div>
+        </div>
+
+        <div className="settings-section">
+          <h3 className="settings-section-title">💾 Tus datos</h3>
+          <p className="settings-section-desc">
+            Descarga un backup completo de tus tareas, proyectos y fechas
+            especiales. Podés restaurarlo en cualquier momento.
+          </p>
+          <div className="data-actions">
+            <button
+              type="button"
+              className="data-btn data-btn-export"
+              onClick={onExportData}
+            >
+              📥 Exportar datos
+            </button>
+            <label className="data-btn data-btn-import">
+              📤 Importar datos
+              <input
+                type="file"
+                accept="application/json,.json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onImportData(file);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <p className="data-help">
+            El import es <strong>aditivo</strong>: agrega todo lo del
+            backup sin borrar lo existente. Los duplicados se pueden
+            eliminar después.
+          </p>
         </div>
       </div>
     </div>

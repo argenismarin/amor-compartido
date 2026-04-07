@@ -406,6 +406,74 @@ export default function Home() {
     setShowHistoryModal(true);
   };
 
+  // ─── Export / Import de datos (E5) ──────────────────────────────
+
+  const handleExportData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/export');
+      if (!res.ok) throw new Error('Server error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const today = new Date().toISOString().split('T')[0];
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `amor-compartido-backup-${today}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('Backup descargado 💾');
+    } catch (error) {
+      console.error('Error exporting:', error);
+      showToast('Error al exportar datos', 'error');
+    }
+  }, [showToast]);
+
+  const handleImportData = useCallback((file) => {
+    if (!file) return;
+    // Confirmación antes de importar (no reemplaza pero igual añade datos)
+    setConfirmDialog({
+      message: `¿Importar "${file.name}"? Los datos se agregarán a los existentes, no los reemplazan.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const text = await file.text();
+          const payload = JSON.parse(text);
+
+          const res = await fetch('/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Server error');
+          }
+
+          const { imported } = await res.json();
+          showToast(
+            `Importado: ${imported.tasks} tareas, ${imported.projects} proyectos, ${imported.subtasks} subtareas 💕`,
+            'success',
+            { duration: 6000 }
+          );
+
+          // Refrescar todas las listas para ver los datos nuevos
+          fetchTasks(false);
+          fetchAssignedByOther();
+          fetchProjects();
+          fetchArchivedProjects();
+        } catch (error) {
+          console.error('Error importing:', error);
+          showToast(`Error al importar: ${error.message || 'archivo inválido'}`, 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null),
+    });
+  }, [showToast, fetchTasks, fetchAssignedByOther]);
+
   // Calculate progress
   const completedTasks = tasks.filter(t => t.is_completed).length;
   const totalTasks = tasks.length;
@@ -1059,6 +1127,8 @@ export default function Home() {
           onEnableNotifications={enableNotifications}
           onDisableNotifications={disableNotifications}
           onSaveSpecialDate={saveSpecialDate}
+          onExportData={handleExportData}
+          onImportData={handleImportData}
           onClose={() => setShowSettingsModal(false)}
         />
       )}

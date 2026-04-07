@@ -2433,6 +2433,49 @@ body {
   border-radius: 8px;
 }
 
+/* Export / Import de datos (E5) */
+.data-actions {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.data-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.data-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+[data-user="argenis"] .data-btn:hover {
+  border-color: var(--burgundy);
+  background: var(--burgundy-light);
+}
+
+.data-help {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin: 0;
+  line-height: 1.4;
+}
+
 /* ============================================
    DARK MODE
    ============================================ */

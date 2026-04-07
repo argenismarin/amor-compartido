@@ -15,6 +15,44 @@ export async function queryOne(sql, params = []) {
   return result.rows[0];
 }
 
+// Ejecuta un callback dentro de una transacción.
+// El callback recibe un cliente dedicado con métodos query(sql, params) y
+// queryOne(sql, params) que operan sobre la transacción.
+// Si el callback throws, se hace ROLLBACK automáticamente. Si termina OK,
+// COMMIT. El cliente se libera al pool en ambos casos.
+//
+// Uso:
+//   const result = await withTransaction(async (tx) => {
+//     const user = await tx.queryOne('INSERT ... RETURNING *', [...]);
+//     await tx.query('INSERT INTO ...', [user.id, ...]);
+//     return user;
+//   });
+export async function withTransaction(callback) {
+  const client = await pool.connect();
+  const tx = {
+    query: async (sql, params = []) => {
+      const result = await client.query(sql, params);
+      return result.rows;
+    },
+    queryOne: async (sql, params = []) => {
+      const result = await client.query(sql, params);
+      return result.rows[0];
+    },
+  };
+
+  try {
+    await client.query('BEGIN');
+    const result = await callback(tx);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Singleton flag to ensure initDatabase runs only once per server instance
 let isInitialized = false;
 
