@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import {
   MOTIVATIONAL_MESSAGES,
   MESIVERSARIO_MESSAGES,
@@ -202,9 +203,24 @@ export default function Home() {
         window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       return;
     }
-    const newConfetti = [];
-    const numPieces = 50;
 
+    // D5 — Adaptive confetti según hardware del device.
+    // Devices con pocos cores o save-data activado reciben menos piezas
+    // para no afectar el FPS. La detección de hardwareConcurrency tiene
+    // baja resolución (mismo valor para muchos devices) pero como heurística
+    // de "es un device modesto" funciona bien.
+    let numPieces = 50;
+    if (typeof navigator !== 'undefined') {
+      const cores = navigator.hardwareConcurrency || 4;
+      const saveData = navigator.connection?.saveData === true;
+      if (saveData || cores <= 2) {
+        numPieces = 15;
+      } else if (cores <= 4) {
+        numPieces = 30;
+      }
+    }
+
+    const newConfetti = [];
     for (let i = 0; i < numPieces; i++) {
       const shapes = ['circle', 'square', 'heart'];
       newConfetti.push({
@@ -461,7 +477,14 @@ export default function Home() {
       <header className="header">
         <div className="header-content">
           <div className="logo-container">
-            <img src="/icon-192.png" alt="Logo" className="logo" />
+            <Image
+              src="/icon-192.png"
+              alt="Logo"
+              className="logo"
+              width={36}
+              height={36}
+              priority
+            />
             <span className="app-title">Amor Compartido</span>
             {streak.current_streak > 0 && (
               <span className="streak-badge" title={`Mejor racha: ${streak.best_streak} días`}>
