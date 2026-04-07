@@ -125,9 +125,7 @@ export default function useTasks({
   // Cargar tareas cuando cambia user / tab / categoría
   useEffect(() => {
     if (currentUser) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchTasks(true);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchAssignedByOther();
     }
   }, [currentUser, activeTab, selectedCategory, fetchTasks, fetchAssignedByOther]);
@@ -136,10 +134,8 @@ export default function useTasks({
   useEffect(() => {
     if (activeTab === 'projects') {
       if (selectedProject) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchProjectTasks(selectedProject);
       } else {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchLooseTasks();
       }
     }

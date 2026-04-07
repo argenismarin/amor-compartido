@@ -243,21 +243,11 @@ export default function Home() {
     disableNotifications,
   } = useNotifications(currentUser, showToast);
 
-  // Fetch resto del estado inicial al montar (users y specialDates los
-  // cargan useUsers / useSpecialDates respectivamente)
-  useEffect(() => {
-    fetchCategories();
-    fetchProjects();
-    fetchArchivedProjects();
-  }, []);
-
   // Fetch streak y achievements al cambiar currentUser
   // (las tareas las maneja useTasks internamente)
   useEffect(() => {
     if (currentUser) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchStreak();
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchAchievements();
     }
   }, [currentUser, fetchStreak, fetchAchievements]);
@@ -315,6 +305,16 @@ export default function Home() {
       setArchivedProjects([]);
     }
   };
+
+  // Carga inicial de categories/projects/archivedProjects al montar.
+  // Las funciones tienen que estar declaradas ANTES del useEffect (Next 16
+  // tiene una regla react-hooks/immutability que valida esto).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetchCategories();
+    fetchProjects();
+    fetchArchivedProjects();
+  }, []);
 
   const fetchHistory = async () => {
     try {
