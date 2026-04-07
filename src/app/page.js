@@ -9,9 +9,12 @@ import {
 } from '@/lib/constants';
 import { formatDateDisplay } from '@/lib/dates';
 import useToast from '@/hooks/useToast';
+import useUsers from '@/hooks/useUsers';
 import useNotifications from '@/hooks/useNotifications';
 import useStreak from '@/hooks/useStreak';
 import useAchievements from '@/hooks/useAchievements';
+import useSpecialDates from '@/hooks/useSpecialDates';
+import usePolling from '@/hooks/usePolling';
 import TaskCard from '@/components/TaskCard';
 import TaskCardSkeleton from '@/components/TaskCardSkeleton';
 import ProjectCard from '@/components/ProjectCard';
@@ -25,14 +28,17 @@ import HistoryModal from '@/components/modals/HistoryModal';
 import SettingsModal from '@/components/modals/SettingsModal';
 
 export default function Home() {
-  const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
+  // Toast state (declarado primero porque otros hooks lo reciben como dep)
+  const { toast, showToast, dismissToast, pauseTimer, resumeTimer } = useToast();
+
+  // Users state via custom hook (lista, currentUser, switch)
+  const { users, currentUser, loading, switchUser } = useUsers(showToast);
+
   const [tasks, setTasks] = useState([]);
   const [assignedByOther, setAssignedByOther] = useState([]);
   const [activeTab, setActiveTab] = useState('myTasks');
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [collapsibleOpen, setCollapsibleOpen] = useState(true);
   const [lastSeenAssignedByOther, setLastSeenAssignedByOther] = useState(null);
 
@@ -64,8 +70,6 @@ export default function Home() {
     }
   }, [collapsibleOpen, markAssignedByOtherAsSeen]);
 
-  // Toast state via custom hook (soporta acción, pausa on hover, cierre manual)
-  const { toast, showToast, dismissToast, pauseTimer, resumeTimer } = useToast();
 
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -114,9 +118,8 @@ export default function Home() {
 
   // Settings/Special dates state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [specialDates, setSpecialDates] = useState([]);
-  const [todaySpecialDate, setTodaySpecialDate] = useState(null);
-  const [mesiversarioInfo, setMesiversarioInfo] = useState(null);
+  const { specialDates, todaySpecialDate, mesiversarioInfo, saveSpecialDate } =
+    useSpecialDates(showToast);
 
 
   // Form state
@@ -265,11 +268,10 @@ export default function Home() {
     disableNotifications,
   } = useNotifications(currentUser, showToast);
 
-  // Fetch users on mount
+  // Fetch resto del estado inicial al montar (users y specialDates los
+  // cargan useUsers / useSpecialDates respectivamente)
   useEffect(() => {
-    fetchUsers();
     fetchCategories();
-    fetchSpecialDates();
     fetchProjects();
     fetchArchivedProjects();
   }, []);
@@ -295,53 +297,20 @@ export default function Home() {
     }
   }, [activeTab, selectedProject]);
 
-  // Real-time sync: Auto-refresh tasks every 5 seconds
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const pollInterval = setInterval(() => {
-      // Solo hacer polling si la página está visible
-      if (document.visibilityState === 'visible') {
-        fetchTasks(false); // false = sin mostrar skeleton
-        fetchAssignedByOther();
-        fetchProjects();
-        if (activeTab === 'projects') {
-          if (selectedProject) {
-            fetchProjectTasks(selectedProject);
-          } else {
-            fetchLooseTasks();
-          }
-        }
+  // Real-time sync: refresca cada 5s y al volver a la pestaña.
+  // El polling se desactiva si no hay currentUser todavía.
+  usePolling(!!currentUser, 5000, () => {
+    fetchTasks(false); // sin skeleton
+    fetchAssignedByOther();
+    fetchProjects();
+    if (activeTab === 'projects') {
+      if (selectedProject) {
+        fetchProjectTasks(selectedProject);
+      } else {
+        fetchLooseTasks();
       }
-    }, 5000); // 5 segundos
-
-    // Refrescar inmediatamente al volver a la pestaña
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchTasks(false);
-        fetchAssignedByOther();
-        fetchProjects();
-        if (activeTab === 'projects') {
-          if (selectedProject) {
-            fetchProjectTasks(selectedProject);
-          } else {
-            fetchLooseTasks();
-          }
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [currentUser, activeTab, selectedCategory, selectedProject]);
-
-  // Check for today's special date and mesiversario
-  useEffect(() => {
-    checkTodaySpecialDate();
-  }, [specialDates]);
+    }
+  });
 
   // Celebrate mesiversario when detected
   useEffect(() => {
@@ -363,24 +332,6 @@ export default function Home() {
       }, 1500);
     }
   }, [mesiversarioInfo, triggerMesiversarioCelebration, triggerConfetti, triggerFloatingHearts, showCelebrationBanner]);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      setUsers(data);
-
-      // Restore user from localStorage or default to first
-      const savedUserId = localStorage.getItem('currentUserId');
-      const savedUser = data.find(u => u.id === parseInt(savedUserId));
-      setCurrentUser(savedUser || data[0]);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      showToast('Error al cargar usuarios', 'error');
-      setLoading(false);
-    }
-  };
 
   const fetchTasks = async (showSkeleton = false) => {
     if (showSkeleton) setTasksLoading(true);
@@ -469,19 +420,6 @@ export default function Home() {
     }
   };
 
-  const fetchSpecialDates = async () => {
-    try {
-      const res = await fetch('/api/special-dates');
-      const data = await res.json();
-      setSpecialDates(data.dates || data);
-      if (data.mesiversarioInfo) {
-        setMesiversarioInfo(data.mesiversarioInfo);
-      }
-    } catch (error) {
-      console.error('Error fetching special dates:', error);
-    }
-  };
-
   const fetchHistory = async () => {
     try {
       const res = await fetch(`/api/history?userId=${currentUser.id}`);
@@ -490,21 +428,6 @@ export default function Home() {
     } catch (error) {
       console.error('Error fetching history:', error);
     }
-  };
-
-  const checkTodaySpecialDate = () => {
-    const today = new Date();
-    const todayMonth = today.getMonth() + 1;
-    const todayDay = today.getDate();
-
-    for (const specialDate of specialDates) {
-      const dateObj = new Date(specialDate.date);
-      if (dateObj.getMonth() + 1 === todayMonth && dateObj.getDate() === todayDay) {
-        setTodaySpecialDate(specialDate);
-        return;
-      }
-    }
-    setTodaySpecialDate(null);
   };
 
   const fetchAssignedByOther = async () => {
@@ -516,11 +439,6 @@ export default function Home() {
       console.error('Error fetching assigned by other:', error);
       showToast('Error al cargar tareas asignadas', 'error');
     }
-  };
-
-  const handleUserSwitch = (user) => {
-    setCurrentUser(user);
-    localStorage.setItem('currentUserId', user.id);
   };
 
   const handleTaskToggle = async (task) => {
@@ -622,21 +540,6 @@ export default function Home() {
       setProjectTasks(previousProjectTasks);
       setLooseTasks(previousLooseTasks);
       showToast('Error al enviar reaccion', 'error');
-    }
-  };
-
-  const saveSpecialDate = async (type, date, userId = null, label = null) => {
-    try {
-      await fetch('/api/special-dates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, date, user_id: userId, label })
-      });
-      fetchSpecialDates();
-      showToast('Fecha guardada 💕');
-    } catch (error) {
-      console.error('Error saving special date:', error);
-      showToast('Error al guardar fecha', 'error');
     }
   };
 
@@ -1251,7 +1154,7 @@ export default function Home() {
             <button
               key={user.id}
               className={`user-btn ${currentUser?.id === user.id ? 'active' : ''}`}
-              onClick={() => handleUserSwitch(user)}
+              onClick={() => switchUser(user)}
             >
               <span>{user.avatar_emoji}</span>
               <span>{user.name}</span>
