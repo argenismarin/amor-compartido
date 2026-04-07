@@ -15,6 +15,7 @@ import useStreak from '@/hooks/useStreak';
 import useAchievements from '@/hooks/useAchievements';
 import useSpecialDates from '@/hooks/useSpecialDates';
 import usePolling from '@/hooks/usePolling';
+import useTasks from '@/hooks/useTasks';
 import TaskCard from '@/components/TaskCard';
 import TaskCardSkeleton from '@/components/TaskCardSkeleton';
 import ProjectCard from '@/components/ProjectCard';
@@ -34,11 +35,7 @@ export default function Home() {
   // Users state via custom hook (lista, currentUser, switch)
   const { users, currentUser, loading, switchUser } = useUsers(showToast);
 
-  const [tasks, setTasks] = useState([]);
-  const [assignedByOther, setAssignedByOther] = useState([]);
   const [activeTab, setActiveTab] = useState('myTasks');
-  const [showModal, setShowModal] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
   const [collapsibleOpen, setCollapsibleOpen] = useState(true);
   const [lastSeenAssignedByOther, setLastSeenAssignedByOther] = useState(null);
 
@@ -74,11 +71,6 @@ export default function Home() {
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState(null);
 
-  // Loading states
-  const [isSaving, setIsSaving] = useState(false);
-  const [togglingTaskId, setTogglingTaskId] = useState(null);
-  const [tasksLoading, setTasksLoading] = useState(true);
-
   // Celebration states
   const [floatingHearts, setFloatingHearts] = useState([]);
   const [confetti, setConfetti] = useState([]);
@@ -109,8 +101,6 @@ export default function Home() {
   const [projectFormData, setProjectFormData] = useState({
     name: '', description: '', emoji: '📁', color: '#6366f1', due_date: ''
   });
-  const [projectTasks, setProjectTasks] = useState([]);
-  const [looseTasks, setLooseTasks] = useState([]);
 
   // History state
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -122,25 +112,10 @@ export default function Home() {
     useSpecialDates(showToast);
 
 
-  // Form state
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    assigned_to: null,
-    due_date: '',
-    priority: 'medium',
-    category_id: null,
-    project_id: null,
-    recurrence: null,
-    is_shared: false
-  });
-
   // Search & sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('default');
 
-  // Quick add state
-  const [quickAddText, setQuickAddText] = useState('');
 
   // Restaurar preferencia de ordenamiento
   useEffect(() => {
@@ -276,41 +251,16 @@ export default function Home() {
     fetchArchivedProjects();
   }, []);
 
-  // Fetch tasks when user changes
+  // Fetch streak y achievements al cambiar currentUser
+  // (las tareas las maneja useTasks internamente)
   useEffect(() => {
     if (currentUser) {
-      fetchTasks(true); // Show skeleton on initial load / tab change
-      fetchAssignedByOther();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchStreak();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchAchievements();
     }
-  }, [currentUser, activeTab, selectedCategory]);
-
-  // Fetch project tasks when project is selected
-  useEffect(() => {
-    if (activeTab === 'projects') {
-      if (selectedProject) {
-        fetchProjectTasks(selectedProject);
-      } else {
-        fetchLooseTasks();
-      }
-    }
-  }, [activeTab, selectedProject]);
-
-  // Real-time sync: refresca cada 5s y al volver a la pestaña.
-  // El polling se desactiva si no hay currentUser todavía.
-  usePolling(!!currentUser, 5000, () => {
-    fetchTasks(false); // sin skeleton
-    fetchAssignedByOther();
-    fetchProjects();
-    if (activeTab === 'projects') {
-      if (selectedProject) {
-        fetchProjectTasks(selectedProject);
-      } else {
-        fetchLooseTasks();
-      }
-    }
-  });
+  }, [currentUser, fetchStreak, fetchAchievements]);
 
   // Celebrate mesiversario when detected
   useEffect(() => {
@@ -332,38 +282,6 @@ export default function Home() {
       }, 1500);
     }
   }, [mesiversarioInfo, triggerMesiversarioCelebration, triggerConfetti, triggerFloatingHearts, showCelebrationBanner]);
-
-  const fetchTasks = async (showSkeleton = false) => {
-    if (showSkeleton) setTasksLoading(true);
-    try {
-      let url = '/api/tasks';
-      const params = new URLSearchParams();
-
-      if (activeTab === 'myTasks') {
-        params.set('userId', currentUser.id);
-        params.set('filter', 'myTasks');
-        params.set('excludeProjectTasks', 'true'); // Excluir tareas de proyectos
-      } else if (activeTab === 'assignedToOther') {
-        params.set('userId', currentUser.id);
-        params.set('filter', 'assignedToOther');
-        params.set('excludeProjectTasks', 'true'); // Excluir tareas de proyectos
-      }
-
-      if (selectedCategory) {
-        params.set('categoryId', selectedCategory);
-      }
-
-      url += `?${params.toString()}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      setTasks(data);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-      showToast('Error al cargar tareas', 'error');
-    } finally {
-      setTasksLoading(false);
-    }
-  };
 
   const fetchCategories = async () => {
     try {
@@ -398,28 +316,6 @@ export default function Home() {
     }
   };
 
-  const fetchProjectTasks = async (projectId) => {
-    try {
-      const res = await fetch(`/api/tasks?projectId=${projectId}`);
-      const data = await res.json();
-      setProjectTasks(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching project tasks:', error);
-      setProjectTasks([]);
-    }
-  };
-
-  const fetchLooseTasks = async () => {
-    try {
-      const res = await fetch('/api/tasks?projectId=null');
-      const data = await res.json();
-      setLooseTasks(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching loose tasks:', error);
-      setLooseTasks([]);
-    }
-  };
-
   const fetchHistory = async () => {
     try {
       const res = await fetch(`/api/history?userId=${currentUser.id}`);
@@ -430,614 +326,65 @@ export default function Home() {
     }
   };
 
-  const fetchAssignedByOther = async () => {
-    try {
-      const res = await fetch(`/api/tasks?userId=${currentUser.id}&filter=assignedByOther&excludeProjectTasks=true`);
-      const data = await res.json();
-      setAssignedByOther(data);
-    } catch (error) {
-      console.error('Error fetching assigned by other:', error);
-      showToast('Error al cargar tareas asignadas', 'error');
-    }
-  };
+  // ─── useTasks: encapsula TODO el state y handlers de tareas ──────
+  // Tiene que ir después de declarar fetchProjects, triggerFloatingHearts
+  // y getRandomMessage porque los recibe como deps.
+  const {
+    tasks, setTasks,
+    assignedByOther, setAssignedByOther,
+    projectTasks,
+    looseTasks,
+    tasksLoading,
+    togglingTaskId,
+    showModal, setShowModal,
+    editingTask,
+    formData, setFormData,
+    isSaving,
+    quickAddText, setQuickAddText,
+    fetchTasks,
+    fetchAssignedByOther,
+    fetchProjectTasks,
+    fetchLooseTasks,
+    handleTaskToggle,
+    handleReaction,
+    handleTaskDelete,
+    handleSubmit,
+    handleQuickAdd,
+    openNewTask,
+    openEditTask,
+    handleSubtaskAdd,
+    handleSubtaskToggle,
+    handleSubtaskDelete,
+  } = useTasks({
+    currentUser,
+    activeTab,
+    selectedCategory,
+    selectedProject,
+    projects,
+    categories,
+    users,
+    showToast,
+    fetchStreak,
+    checkNewAchievements,
+    triggerFloatingHearts,
+    getRandomMessage,
+    refreshProjects: fetchProjects,
+  });
 
-  const handleTaskToggle = async (task) => {
-    setTogglingTaskId(task.id);
-    const wasCompleted = task.is_completed;
-    const newCompletedStatus = !wasCompleted;
-
-    // Optimistic update - update UI immediately
-    const updateTaskInList = (list) => list.map(t =>
-      t.id === task.id
-        ? { ...t, is_completed: newCompletedStatus, completed_at: newCompletedStatus ? new Date().toISOString() : null }
-        : t
-    );
-
-    const previousTasks = tasks;
-    const previousAssignedByOther = assignedByOther;
-    const previousProjectTasks = projectTasks;
-    const previousLooseTasks = looseTasks;
-
-    setTasks(updateTaskInList);
-    setAssignedByOther(updateTaskInList);
-    setProjectTasks(updateTaskInList);
-    setLooseTasks(updateTaskInList);
-
-    // Celebrate immediately when marking as complete
-    if (newCompletedStatus) {
-      triggerFloatingHearts();
-      showToast(getRandomMessage());
-    } else {
-      showToast('Tarea marcada como pendiente');
-    }
-
-    try {
-      const response = await fetch(`/api/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toggle_complete: true })
-      });
-
-      if (!response.ok) {
-        throw new Error('Server error');
-      }
-
-      // Check for new achievements after completing a task (background)
-      if (newCompletedStatus) {
-        setTimeout(() => checkNewAchievements(), 500);
-        fetchStreak();
-      }
-
-      // Refresh projects to update counts
-      if (activeTab === 'projects') {
-        fetchProjects();
-      }
-    } catch (error) {
-      // Rollback on error
-      console.error('Error toggling task:', error);
-      setTasks(previousTasks);
-      setAssignedByOther(previousAssignedByOther);
-      setProjectTasks(previousProjectTasks);
-      setLooseTasks(previousLooseTasks);
-      showToast('Error al actualizar la tarea', 'error');
-    } finally {
-      setTogglingTaskId(null);
-    }
-  };
-
-  const handleReaction = async (taskId, emoji) => {
-    // Optimistic update
-    const updateTaskInList = (list) => list.map(t =>
-      t.id === taskId ? { ...t, reaction: emoji } : t
-    );
-
-    const previousTasks = tasks;
-    const previousAssignedByOther = assignedByOther;
-    const previousProjectTasks = projectTasks;
-    const previousLooseTasks = looseTasks;
-
-    setTasks(updateTaskInList);
-    setAssignedByOther(updateTaskInList);
-    setProjectTasks(updateTaskInList);
-    setLooseTasks(updateTaskInList);
-    showToast('Reaccion enviada 💕');
-
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reaction: emoji })
-      });
-
-      if (!response.ok) {
-        throw new Error('Server error');
-      }
-    } catch (error) {
-      // Rollback on error
-      console.error('Error adding reaction:', error);
-      setTasks(previousTasks);
-      setAssignedByOther(previousAssignedByOther);
-      setProjectTasks(previousProjectTasks);
-      setLooseTasks(previousLooseTasks);
-      showToast('Error al enviar reaccion', 'error');
-    }
-  };
-
-  const handleProjectSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-
-    const isEditing = !!editingProject;
-    const method = isEditing ? 'PUT' : 'POST';
-    const url = isEditing ? `/api/projects/${editingProject.id}` : '/api/projects';
-
-    try {
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(projectFormData)
-      });
-
-      if (!response.ok) {
-        throw new Error('Server error');
-      }
-
-      setShowProjectModal(false);
-      setEditingProject(null);
-      setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
-      fetchProjects();
-      showToast(isEditing ? 'Proyecto actualizado' : 'Proyecto creado 📁');
-    } catch (error) {
-      console.error('Error saving project:', error);
-      showToast('Error al guardar el proyecto', 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleProjectDelete = async (projectId) => {
-    setConfirmDialog({
-      message: '¿Archivar este proyecto?',
-      onConfirm: async () => {
-        setConfirmDialog(null);
-        try {
-          const response = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
-          if (!response.ok) throw new Error('Server error');
-          fetchProjects();
-          fetchArchivedProjects();
-          setSelectedProject(null);
-          showToast('Proyecto archivado');
-        } catch (error) {
-          console.error('Error archiving project:', error);
-          showToast('Error al archivar el proyecto', 'error');
-        }
-      },
-      onCancel: () => setConfirmDialog(null)
-    });
-  };
-
-  const handleRestoreProject = async (projectId) => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_archived: false })
-      });
-      if (!response.ok) throw new Error('Server error');
-      fetchProjects();
-      fetchArchivedProjects();
-      showToast('Proyecto restaurado');
-    } catch (error) {
-      console.error('Error restoring project:', error);
-      showToast('Error al restaurar el proyecto', 'error');
-    }
-  };
-
-  const handleDeleteProjectPermanently = async (projectId, projectName) => {
-    setConfirmDialog({
-      message: `¿Eliminar "${projectName}" permanentemente? Esto borrará todas sus tareas.`,
-      onConfirm: async () => {
-        setConfirmDialog(null);
-        try {
-          const response = await fetch(`/api/projects/${projectId}?permanent=true`, { method: 'DELETE' });
-          if (!response.ok) throw new Error('Server error');
-          fetchArchivedProjects();
-          showToast('Proyecto eliminado permanentemente');
-        } catch (error) {
-          console.error('Error deleting project:', error);
-          showToast('Error al eliminar el proyecto', 'error');
-        }
-      },
-      onCancel: () => setConfirmDialog(null)
-    });
-  };
-
-  const openNewProject = () => {
-    setEditingProject(null);
-    setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
-    setShowProjectModal(true);
-  };
-
-  const openEditProject = (project) => {
-    setEditingProject(project);
-    setProjectFormData({
-      name: project.name,
-      description: project.description || '',
-      emoji: project.emoji || '📁',
-      color: project.color || '#6366f1',
-      due_date: project.due_date ? project.due_date.split('T')[0] : ''
-    });
-    setShowProjectModal(true);
-  };
-
-  const handleUndoDelete = useCallback(async (taskId) => {
-    try {
-      const response = await fetch(`/api/tasks/${taskId}/restore`, { method: 'POST' });
-      if (!response.ok) throw new Error('Server error');
-
-      // Refrescar las listas
-      if (currentUser) {
-        fetchTasks(false);
-        fetchAssignedByOther();
-      }
-      if (activeTab === 'projects') {
-        fetchProjects();
-        if (selectedProject) {
-          fetchProjectTasks(selectedProject);
-        } else {
-          fetchLooseTasks();
-        }
-      }
-
-      showToast('Tarea restaurada 💕');
-    } catch (error) {
-      console.error('Error restoring task:', error);
-      showToast('Error al deshacer', 'error');
-    }
-  }, [currentUser, activeTab, selectedProject, showToast]);
-
-  const handleTaskDelete = async (taskId) => {
-    // Soft delete + undo: sin confirmDialog, el undo de 7s actúa como red de seguridad.
-    const previousTasks = tasks;
-    const previousAssignedByOther = assignedByOther;
-    const previousProjectTasks = projectTasks;
-    const previousLooseTasks = looseTasks;
-
-    // Optimistic update - remove from lists immediately
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-    setAssignedByOther(prev => prev.filter(t => t.id !== taskId));
-    setProjectTasks(prev => prev.filter(t => t.id !== taskId));
-    setLooseTasks(prev => prev.filter(t => t.id !== taskId));
-
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-
-      if (!response.ok) {
-        throw new Error('Server error');
-      }
-
-      showToast('Tarea eliminada', 'success', {
-        duration: 7000,
-        action: {
-          label: 'Deshacer',
-          onClick: () => handleUndoDelete(taskId)
-        }
-      });
-
-      // Refresh projects to update counts
-      if (activeTab === 'projects') {
-        fetchProjects();
-      }
-    } catch (error) {
-      // Rollback on error
-      console.error('Error deleting task:', error);
-      setTasks(previousTasks);
-      setAssignedByOther(previousAssignedByOther);
-      setProjectTasks(previousProjectTasks);
-      setLooseTasks(previousLooseTasks);
-      showToast('Error al eliminar la tarea', 'error');
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-
-    const isEditing = !!editingTask;
-    const method = isEditing ? 'PUT' : 'POST';
-    const url = isEditing ? `/api/tasks/${editingTask.id}` : '/api/tasks';
-
-    // Get category info for optimistic task
-    const categoryInfo = categories.find(c => c.id === formData.category_id);
-    const assignedToUser = users.find(u => u.id === formData.assigned_to);
-    const assignedByUser = currentUser;
-
-    // Create optimistic task object
-    const optimisticTask = {
-      id: isEditing ? editingTask.id : `temp-${Date.now()}`,
-      ...formData,
-      assigned_by: currentUser.id,
-      is_completed: isEditing ? editingTask.is_completed : false,
-      completed_at: isEditing ? editingTask.completed_at : null,
-      created_at: isEditing ? editingTask.created_at : new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      assigned_to_name: assignedToUser?.name,
-      assigned_to_avatar: assignedToUser?.avatar_emoji,
-      assigned_by_name: assignedByUser?.name,
-      assigned_by_avatar: assignedByUser?.avatar_emoji,
-      category_name: categoryInfo?.name,
-      category_emoji: categoryInfo?.emoji,
-      category_color: categoryInfo?.color
-    };
-
-    // Save previous state for rollback
-    const previousTasks = tasks;
-    const previousAssignedByOther = assignedByOther;
-
-    // Optimistic update
-    if (isEditing) {
-      setTasks(prev => prev.map(t => t.id === editingTask.id ? optimisticTask : t));
-      setAssignedByOther(prev => prev.map(t => t.id === editingTask.id ? optimisticTask : t));
-    } else {
-      // Add to appropriate list based on who it's assigned to
-      if (formData.assigned_to === currentUser.id) {
-        setTasks(prev => [optimisticTask, ...prev]);
-      } else {
-        // Task assigned to other user by current user - it would appear in "Para [Partner]" tab
-        if (activeTab === 'assignedToOther') {
-          setTasks(prev => [optimisticTask, ...prev]);
-        }
-      }
-    }
-
-    setShowModal(false);
-    setEditingTask(null);
-    setFormData({ title: '', description: '', assigned_to: null, due_date: '', priority: 'medium', category_id: null, project_id: null, recurrence: null, is_shared: false });
-    showToast(isEditing ? 'Tarea actualizada' : 'Tarea creada 💕');
-
-    // Refresh project data if we're in projects tab
+  // Polling: refresca cada 5s las funciones del hook + projects
+  usePolling(!!currentUser, 5000, () => {
+    fetchTasks(false);
+    fetchAssignedByOther();
+    fetchProjects();
     if (activeTab === 'projects') {
-      fetchProjects();
       if (selectedProject) {
         fetchProjectTasks(selectedProject);
       } else {
         fetchLooseTasks();
       }
     }
+  });
 
-    try {
-      const payload = {
-        ...formData,
-        assigned_by: currentUser.id,
-      };
-      // Optimistic locking: si estamos editando, mandamos el updated_at
-      // que vimos para que el server detecte si cambió desde entonces.
-      if (isEditing && editingTask?.updated_at) {
-        payload.expected_updated_at = editingTask.updated_at;
-      }
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      // 409 Conflict: la pareja editó la tarea entre que la abrimos y guardamos
-      if (response.status === 409) {
-        setTasks(previousTasks);
-        setAssignedByOther(previousAssignedByOther);
-        // Refrescar para que el usuario vea la versión actual
-        fetchTasks(false);
-        fetchAssignedByOther();
-        showToast('Tu pareja editó esta tarea, refrescamos los cambios', 'info', { duration: 5000 });
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error('Server error');
-      }
-
-      const result = await response.json();
-
-      // Replace temp ID with real ID for new tasks
-      if (!isEditing && result.id) {
-        setTasks(prev => prev.map(t =>
-          t.id === optimisticTask.id ? { ...t, id: result.id } : t
-        ));
-      }
-    } catch (error) {
-      // Rollback on error
-      console.error('Error saving task:', error);
-      setTasks(previousTasks);
-      setAssignedByOther(previousAssignedByOther);
-      showToast('Error al guardar la tarea', 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Subtareas: helper para aplicar un cambio a la subtarea de una tarea
-  // dentro de cualquiera de las listas activas (tasks, assignedByOther,
-  // projectTasks, looseTasks).
-  const updateTaskSubtasks = useCallback((taskId, updaterFn) => {
-    const apply = (list) => list.map(t =>
-      t.id === taskId
-        ? { ...t, subtasks: updaterFn(Array.isArray(t.subtasks) ? t.subtasks : []) }
-        : t
-    );
-    setTasks(apply);
-    setAssignedByOther(apply);
-    setProjectTasks(apply);
-    setLooseTasks(apply);
-  }, []);
-
-  const handleSubtaskAdd = useCallback(async (taskId, title) => {
-    if (!title || !title.trim()) return;
-    const trimmed = title.trim();
-
-    // Optimistic con id temporal
-    const tempId = `temp-sub-${Date.now()}`;
-    updateTaskSubtasks(taskId, prev => [
-      ...prev,
-      { id: tempId, title: trimmed, is_completed: false, sort_order: prev.length + 1 }
-    ]);
-
-    try {
-      const res = await fetch('/api/subtasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, title: trimmed }),
-      });
-      if (!res.ok) throw new Error('Server error');
-      const data = await res.json();
-      // Reemplazar id temporal con id real
-      updateTaskSubtasks(taskId, prev => prev.map(s =>
-        s.id === tempId ? { ...s, id: data.subtask.id } : s
-      ));
-    } catch (error) {
-      console.error('Error adding subtask:', error);
-      // Rollback: quitar la subtarea optimista
-      updateTaskSubtasks(taskId, prev => prev.filter(s => s.id !== tempId));
-      showToast('Error al agregar subtarea', 'error');
-    }
-  }, [updateTaskSubtasks, showToast]);
-
-  const handleSubtaskToggle = useCallback(async (taskId, subtaskId) => {
-    // Optimistic
-    updateTaskSubtasks(taskId, prev => prev.map(s =>
-      s.id === subtaskId ? { ...s, is_completed: !s.is_completed } : s
-    ));
-
-    try {
-      const res = await fetch(`/api/subtasks/${subtaskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toggle_complete: true }),
-      });
-      if (!res.ok) throw new Error('Server error');
-    } catch (error) {
-      console.error('Error toggling subtask:', error);
-      // Rollback
-      updateTaskSubtasks(taskId, prev => prev.map(s =>
-        s.id === subtaskId ? { ...s, is_completed: !s.is_completed } : s
-      ));
-      showToast('Error al actualizar subtarea', 'error');
-    }
-  }, [updateTaskSubtasks, showToast]);
-
-  const handleSubtaskDelete = useCallback(async (taskId, subtaskId) => {
-    // Optimistic — guardamos la subtarea por si hay que revertir
-    let removedSubtask = null;
-    updateTaskSubtasks(taskId, prev => {
-      removedSubtask = prev.find(s => s.id === subtaskId);
-      return prev.filter(s => s.id !== subtaskId);
-    });
-
-    try {
-      const res = await fetch(`/api/subtasks/${subtaskId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Server error');
-    } catch (error) {
-      console.error('Error deleting subtask:', error);
-      // Rollback
-      if (removedSubtask) {
-        updateTaskSubtasks(taskId, prev => [...prev, removedSubtask]
-          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
-      }
-      showToast('Error al eliminar subtarea', 'error');
-    }
-  }, [updateTaskSubtasks, showToast]);
-
-  // Quick add: crea una tarea con título solamente, sin abrir modal.
-  // Asignación derivada del contexto actual (tab + proyecto seleccionado).
-  const handleQuickAdd = async (e) => {
-    e.preventDefault();
-    const title = quickAddText.trim();
-    if (!title || !currentUser) return;
-
-    let assignedTo = currentUser.id;
-    let projectId = null;
-
-    if (activeTab === 'assignedToOther') {
-      assignedTo = getOtherUser()?.id || currentUser.id;
-    } else if (activeTab === 'projects' && selectedProject) {
-      projectId = selectedProject;
-    }
-
-    const payload = {
-      title,
-      description: null,
-      assigned_to: assignedTo,
-      assigned_by: currentUser.id,
-      due_date: null,
-      priority: 'medium',
-      category_id: null,
-      project_id: projectId,
-      recurrence: null,
-      is_shared: false,
-    };
-
-    const assignedToUser = users.find(u => u.id === assignedTo);
-    const optimisticTask = {
-      id: `temp-${Date.now()}`,
-      ...payload,
-      is_completed: false,
-      completed_at: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      assigned_to_name: assignedToUser?.name,
-      assigned_to_avatar: assignedToUser?.avatar_emoji,
-      assigned_by_name: currentUser.name,
-      assigned_by_avatar: currentUser.avatar_emoji,
-    };
-
-    // Optimistic update según contexto
-    if (projectId) {
-      setProjectTasks(prev => [optimisticTask, ...prev]);
-    } else {
-      setTasks(prev => [optimisticTask, ...prev]);
-    }
-
-    setQuickAddText('');
-
-    try {
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('Server error');
-      const result = await res.json();
-
-      // Reemplazar temp ID con id real
-      if (result.id) {
-        const replaceId = (list) => list.map(t =>
-          t.id === optimisticTask.id ? { ...t, id: result.id } : t
-        );
-        setTasks(replaceId);
-        setProjectTasks(replaceId);
-      }
-
-      if (activeTab === 'projects') fetchProjects();
-    } catch (error) {
-      console.error('Error en quick add:', error);
-      const removeOpt = (list) => list.filter(t => t.id !== optimisticTask.id);
-      setTasks(removeOpt);
-      setProjectTasks(removeOpt);
-      showToast('Error al agregar tarea', 'error');
-    }
-  };
-
-  const openNewTask = (projectId = null) => {
-    setEditingTask(null);
-    setFormData({
-      title: '',
-      description: '',
-      assigned_to: currentUser?.id,
-      due_date: '',
-      priority: 'medium',
-      category_id: null,
-      project_id: projectId || (activeTab === 'projects' && selectedProject ? selectedProject : null),
-      recurrence: null,
-      is_shared: false
-    });
-    setShowModal(true);
-  };
-
-  const openEditTask = (task) => {
-    setEditingTask(task);
-    setFormData({
-      title: task.title,
-      description: task.description || '',
-      assigned_to: task.assigned_to,
-      due_date: task.due_date ? task.due_date.split('T')[0] : '',
-      priority: task.priority,
-      category_id: task.category_id || null,
-      project_id: task.project_id || null,
-      recurrence: task.recurrence || null,
-      is_shared: task.is_shared || false
-    });
-    setShowModal(true);
-  };
 
   const openHistory = async () => {
     await fetchHistory();
