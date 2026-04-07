@@ -65,12 +65,14 @@ export default function useSpecialDates(showToast) {
     [fetchSpecialDates, showToast]
   );
 
-  // Cargar al montar
+  // Cargar al montar — patrón estándar de "load on mount"
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     fetchSpecialDates();
   }, [fetchSpecialDates]);
 
   // Recalcular el evento de hoy cuando cambian las fechas especiales
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     checkTodaySpecialDate();
   }, [checkTodaySpecialDate]);
