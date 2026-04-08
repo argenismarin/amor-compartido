@@ -354,7 +354,14 @@ export default function useTasks({
     }
 
     try {
-      const payload = { ...formData, assigned_by: currentUser.id };
+      // Normalizar due_date: el <input type="date"> devuelve '' cuando
+      // está vacío, pero la validación zod del backend solo acepta null,
+      // undefined o un YYYY-MM-DD válido. Convertimos '' → null aquí.
+      const payload = {
+        ...formData,
+        assigned_by: currentUser.id,
+        due_date: formData.due_date || null,
+      };
       if (isEditing && editingTask?.updated_at) {
         payload.expected_updated_at = editingTask.updated_at;
       }

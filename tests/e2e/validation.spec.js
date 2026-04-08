@@ -48,6 +48,28 @@ test.describe('Validación zod en endpoints', () => {
     expect(body.error).toContain('title');
   });
 
+  test('POST /api/tasks con due_date vacío NO rechaza por due_date', async ({ page }) => {
+    // Regresión: el <input type="date"> del cliente envía '' cuando el
+    // usuario no elige fecha. El schema debe tratarlo como null, no
+    // rechazarlo con 400. Si hay una BD disponible el status será 200;
+    // en CI sin BD será 500 por el INSERT. Lo único que NO debe pasar
+    // es un 400 mencionando due_date (eso sería la regresión).
+    const { status, body } = await fetchApi(page, '/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Tarea sin fecha',
+        assigned_to: 1,
+        assigned_by: 2,
+        due_date: '',
+      }),
+    });
+
+    if (status === 400) {
+      expect(body.error).not.toContain('due_date');
+    }
+  });
+
   test('POST /api/tasks con priority inválida devuelve 400', async ({ page }) => {
     const { status, body } = await fetchApi(page, '/api/tasks', {
       method: 'POST',

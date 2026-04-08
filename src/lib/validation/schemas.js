@@ -13,11 +13,19 @@ const trimmedString = (max) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max) =>
   z.string().trim().max(max).nullable().optional();
 
-// YYYY-MM-DD o null
+// YYYY-MM-DD, cadena vacía (se normaliza a null), null o undefined.
+//
+// Aceptamos '' y la transformamos a null porque el <input type="date">
+// del cliente devuelve '' cuando el usuario no elige fecha. Clientes
+// cacheados del service worker del PWA (que aún no tienen el fix del
+// hook) siguen enviando '', así que el servidor tiene que tolerar esa
+// forma para no devolver 400.
 const dateString = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}/)
-  .nullable()
+  .union([
+    z.literal('').transform(() => null),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}/),
+    z.null(),
+  ])
   .optional();
 
 const priorityEnum = z.enum(['low', 'medium', 'high']);
