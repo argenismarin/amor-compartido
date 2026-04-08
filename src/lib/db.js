@@ -348,9 +348,11 @@ export async function initDatabase() {
             AND column_name = 'is_completed'
             AND data_type IN ('smallint', 'integer')
         ) THEN
+          -- PostgreSQL no tiene cast directo smallint→boolean, pero sí
+          -- smallint→int y int→boolean. Encadenamos los dos.
           ALTER TABLE AppChecklist_tasks
             ALTER COLUMN is_completed DROP DEFAULT,
-            ALTER COLUMN is_completed TYPE BOOLEAN USING (is_completed::boolean),
+            ALTER COLUMN is_completed TYPE BOOLEAN USING (is_completed::int::boolean),
             ALTER COLUMN is_completed SET DEFAULT FALSE;
         END IF;
 
@@ -362,7 +364,7 @@ export async function initDatabase() {
         ) THEN
           ALTER TABLE AppChecklist_projects
             ALTER COLUMN is_archived DROP DEFAULT,
-            ALTER COLUMN is_archived TYPE BOOLEAN USING (is_archived::boolean),
+            ALTER COLUMN is_archived TYPE BOOLEAN USING (is_archived::int::boolean),
             ALTER COLUMN is_archived SET DEFAULT FALSE;
         END IF;
       END $$;
