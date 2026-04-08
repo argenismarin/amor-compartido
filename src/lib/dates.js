@@ -48,13 +48,47 @@ export const formatDateDisplay = (dateStr, options = { day: 'numeric', month: 's
   return date.toLocaleDateString('es-CO', options);
 };
 
-// Formatea una fecha con hora para mostrar
+// Formatea una fecha con hora para mostrar.
+//
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  ⚠️  FIX COMPENSATORIO — REVERTIR JUNTO AL FIX DE RAÍZ  ⚠️        ║
+// ║                                                                  ║
+// ║  Hay un bug en el helper server-side `getBogotaDate()` de        ║
+// ║  `src/lib/timezone.js`: cuando corre en Vercel (TZ=UTC), produce ║
+// ║  un Date object desplazado -5 horas vs el momento real. Ese      ║
+// ║  valor se guarda en `completed_at` vía pg driver, así que la DB  ║
+// ║  tiene todos los timestamps "pretend-UTC" pero representando     ║
+// ║  hora Bogotá. Las queries SQL sobre el valor crudo funcionan     ║
+// ║  por accidente (el mismo shift aplica en INSERT y SELECT), pero  ║
+// ║  si convertimos explícitamente con `timeZone: 'America/Bogota'`  ║
+// ║  acá, restamos 5 horas extra y mostramos 05:31 am para una       ║
+// ║  tarea completada a las 10:31 am.                                ║
+// ║                                                                  ║
+// ║  Esta función compensa el bug: interpreta el ISO como "ya está   ║
+// ║  en hora Bogotá" ignorando el Z, parsea como local y formatea    ║
+// ║  sin timeZone option. Para un cliente en Colombia muestra la     ║
+// ║  hora real; para clientes en otra zona muestra la misma hora     ║
+// ║  Bogotá sin reinterpretar.                                       ║
+// ║                                                                  ║
+// ║  FIX DE RAÍZ PENDIENTE: migrar columna a TIMESTAMPTZ + usar      ║
+// ║  NOW() en inserts + AT TIME ZONE 'America/Bogota' en selects +   ║
+// ║  migración de datos históricos. Cuando se haga, REVERTIR esta    ║
+// ║  función a su versión original (usar { timeZone: TIMEZONE } en   ║
+// ║  toLocaleString) y BUSCAR TODO:TIMEZONE-FIX-ROOT en el repo.     ║
+// ╚══════════════════════════════════════════════════════════════════╝
+// TODO:TIMEZONE-FIX-ROOT — ver bloque arriba
 export const formatDateTimeDisplay = (
   dateStr,
   options = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
 ) => {
   if (!dateStr) return '';
-  // Para timestamps completos, usar zona horaria de Bogotá
-  const date = new Date(dateStr);
-  return date.toLocaleString('es-CO', { ...options, timeZone: TIMEZONE });
+  // Quitar milisegundos y marca Z; el resto del string queda como
+  // "YYYY-MM-DDTHH:MM:SS" que `new Date()` interpretará como local.
+  const str = String(dateStr).replace(/\.\d+/, '').replace(/Z$/, '');
+  const date = new Date(str);
+  if (Number.isNaN(date.getTime())) return '';
+  // Sin timeZone option — dejamos que el navegador use el local del
+  // cliente. Como el string ya está "en Bogotá", el resultado refleja
+  // la hora real de completado.
+  return date.toLocaleString('es-CO', options);
 };
