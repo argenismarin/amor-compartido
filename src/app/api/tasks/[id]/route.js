@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, withTransaction } from '@/lib/db';
 import { sendPushToUser } from '@/lib/push';
 import { getBogotaDate, getTodayBogota, getYesterdayBogota } from '@/lib/timezone';
 import {
@@ -61,16 +61,43 @@ export async function PUT(request, { params }) {
       // is_completed es BOOLEAN puro (normalizado por la migración en db.js)
       const newCompletedStatus = !task.is_completed;
 
-      await query(
-        `UPDATE AppChecklist_tasks
-         SET is_completed = $1,
-             completed_at = $2,
-             updated_at = NOW()
-         WHERE id = $3`,
-        [newCompletedStatus, newCompletedStatus ? getBogotaDate() : null, id]
-      );
+      // Envolvemos UPDATE + (opcional) INSERT recurrente en una sola
+      // transacción. Si el INSERT recurrente falla, revertimos también
+      // el toggle para no dejar la tarea "completa pero sin siguiente
+      // instancia" — un estado inconsistente que antes se tragaba en
+      // silencio dentro de un try/catch.
+      //
+      // updateStreak y push notifications quedan FUERA de la transacción:
+      // son efectos secundarios (streak es otra tabla con su propia
+      // tolerancia a fallos; push es externo) y no deben tumbar el
+      // commit principal si fallan.
+      await withTransaction(async (tx) => {
+        await tx.query(
+          `UPDATE AppChecklist_tasks
+           SET is_completed = $1,
+               completed_at = $2,
+               updated_at = NOW()
+           WHERE id = $3`,
+          [newCompletedStatus, newCompletedStatus ? getBogotaDate() : null, id]
+        );
 
-      // Update streak if completing a task
+        if (newCompletedStatus && task.recurrence) {
+          const nextDueDate = calculateNextDueDate(task.due_date, task.recurrence);
+          if (nextDueDate) {
+            await tx.query(
+              `INSERT INTO AppChecklist_tasks
+               (title, description, assigned_to, assigned_by, due_date, priority,
+                category_id, project_id, recurrence, recurrence_days, is_shared)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+              [task.title, task.description, task.assigned_to, task.assigned_by,
+               nextDueDate, task.priority, task.category_id, task.project_id,
+               task.recurrence, task.recurrence_days, task.is_shared || false]
+            );
+          }
+        }
+      });
+
+      // Efectos secundarios post-commit (no transaccionales)
       if (newCompletedStatus) {
         await updateStreak(task.assigned_to);
 
@@ -89,26 +116,6 @@ export async function PUT(request, { params }) {
           }
         } catch (pushErr) {
           console.error('Error sending push for completion:', pushErr);
-        }
-
-        // Si la tarea es recurrente, generar la siguiente instancia
-        if (task.recurrence) {
-          const nextDueDate = calculateNextDueDate(task.due_date, task.recurrence);
-          if (nextDueDate) {
-            try {
-              await query(
-                `INSERT INTO AppChecklist_tasks
-                 (title, description, assigned_to, assigned_by, due_date, priority,
-                  category_id, project_id, recurrence, recurrence_days, is_shared)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                [task.title, task.description, task.assigned_to, task.assigned_by,
-                 nextDueDate, task.priority, task.category_id, task.project_id,
-                 task.recurrence, task.recurrence_days, task.is_shared || false]
-              );
-            } catch (recurErr) {
-              console.error('Error creating recurring task:', recurErr);
-            }
-          }
         }
       }
 
