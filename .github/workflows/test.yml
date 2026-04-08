@@ -21,6 +21,27 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+  build:
+    name: Build (next build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run next build
+        run: npm run build
+        env:
+          # DATABASE_URL fake — el build no ejecuta queries, pero db.js
+          # importa pg.Pool al cargarse. Sin esto, el build crashea.
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          # Evita que Sentry intente subir source maps sin auth token.
+          SENTRY_DSN: ''
+
   e2e:
     name: E2E tests (Playwright)
     runs-on: ubuntu-latest
