@@ -91,6 +91,10 @@ export const updateProjectSchema = z.object({
   color: z.string().max(20).optional(),
   due_date: dateString,
   is_archived: z.boolean().optional(),
+  // Para optimistic locking (mismo patrón que updateTaskSchema).
+  // Si el cliente lo envía, el UPDATE valida que el updated_at actual
+  // coincida; si no, devuelve 409 conflict.
+  expected_updated_at: z.string().nullable().optional(),
 });
 
 // ─── Subtasks ───────────────────────────────────────────────────────

@@ -41,7 +41,10 @@ export async function PUT(request, { params }) {
     if (error) {
       return NextResponse.json({ error }, { status: 400 });
     }
-    const { name, description, emoji, color, due_date, is_archived } = data;
+    const {
+      name, description, emoji, color, due_date, is_archived,
+      expected_updated_at,
+    } = data;
 
     const updates = [];
     const values = [];
@@ -88,12 +91,43 @@ export async function PUT(request, { params }) {
     }
 
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
-    values.push(id);
 
-    await query(
-      `UPDATE AppChecklist_projects SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
-      values
-    );
+    // El último parámetro es siempre el id del proyecto. Si hay
+    // optimistic locking, agregamos expected_updated_at al WHERE y
+    // RETURNING id para detectar el conflict con filas afectadas.
+    values.push(id);
+    const idParam = paramIndex;
+    paramIndex++;
+
+    let sql = `UPDATE AppChecklist_projects SET ${updates.join(', ')} WHERE id = $${idParam}`;
+    if (expected_updated_at) {
+      sql += ` AND updated_at = $${paramIndex}`;
+      values.push(expected_updated_at);
+      paramIndex++;
+    }
+    sql += ' RETURNING id';
+
+    const updated = await query(sql, values);
+
+    // Si vino expected_updated_at y no se actualizó nada, hubo conflict.
+    // Devolvemos el estado actual del proyecto para que el cliente pueda
+    // refrescar y mostrar un toast explicativo (mismo patrón que tasks).
+    if (expected_updated_at && updated.length === 0) {
+      const current = await queryOne(
+        `SELECT p.*,
+          COUNT(t.id) as total_tasks,
+          COUNT(CASE WHEN t.is_completed THEN 1 END) as completed_tasks
+         FROM AppChecklist_projects p
+         LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
+         WHERE p.id = $1
+         GROUP BY p.id`,
+        [id]
+      );
+      return NextResponse.json(
+        { error: 'conflict', message: 'El proyecto fue modificado por tu pareja', current },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
