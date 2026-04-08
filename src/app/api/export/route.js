@@ -14,15 +14,21 @@ export async function GET() {
   try {
     await ensureDatabase();
 
-    // Tasks con subtasks anidadas (mismo pattern que /api/tasks GET)
-    // Incluimos las eliminadas SOFT para preservar el historial completo
+    // Tasks con subtasks anidadas (mismo pattern que /api/tasks GET).
+    // Excluimos soft-deleted (deleted_at IS NOT NULL): aunque el comentario
+    // previo decía "preservar el historial completo", en la práctica al
+    // reimportar el backup aparecían tareas fantasma que el usuario ya
+    // había borrado de la UI — confuso y contraintuitivo. Si el usuario
+    // quiere restaurar una tarea borrada, puede hacerlo via el "Deshacer"
+    // del toast durante la ventana de undo; una vez pasada esa ventana,
+    // la tarea está conceptualmente eliminada y no debería reaparecer en
+    // el backup.
     const tasks = await query(`
       SELECT
         t.id, t.title, t.description, t.assigned_to, t.assigned_by,
         t.is_completed, t.completed_at, t.due_date, t.priority,
         t.reaction, t.category_id, t.project_id, t.recurrence,
         t.recurrence_days, t.is_shared, t.created_at, t.updated_at,
-        t.deleted_at,
         COALESCE(subs.subtasks, '[]'::json) as subtasks
       FROM AppChecklist_tasks t
       LEFT JOIN LATERAL (
@@ -37,6 +43,7 @@ export async function GET() {
         ) as subtasks
         FROM AppChecklist_subtasks s WHERE s.task_id = t.id
       ) subs ON true
+      WHERE t.deleted_at IS NULL
       ORDER BY t.created_at DESC
     `);
 
