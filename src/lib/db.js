@@ -55,17 +55,42 @@ export async function withTransaction(callback) {
 
 // Singleton flag to ensure initDatabase runs only once per server instance
 let isInitialized = false;
+// Si initDatabase falla, guardamos el error acá para:
+//   1. Loggearlo de forma ruidosa en cada request posterior (no queremos
+//      que un init roto quede silencioso como pasó con la migración C5)
+//   2. Exponerlo en /api/health si se decide agregar ese endpoint
+let initError = null;
+
+export function getInitError() {
+  return initError;
+}
 
 export async function ensureDatabase() {
-  if (isInitialized) return;
-  // Si initDatabase falla, igual marcamos como inicializada para no reintentar
-  // en cada request (cada reintento tarda igual y el filesystem de Vercel
-  // puede estar bajo presión). Las APIs intentarán sus queries y fallarán
-  // con un error específico — más útil para debug que un loop infinito.
+  if (isInitialized) {
+    // Si la inicialización falló, cada request siguiente re-loggea el
+    // error con contexto. Costoso en logs pero imposible de ignorar —
+    // preferible a un silencio que deja la app sirviendo 500s opacos.
+    if (initError) {
+      console.error(
+        '[db] ⚠️  Operando con initDatabase FALLIDA. Queries que dependan ' +
+          'de migraciones pueden fallar. Error original:',
+        initError
+      );
+    }
+    return;
+  }
   try {
     await initDatabase();
+    initError = null;
   } catch (err) {
-    console.error('[db] initDatabase failed (continuing anyway):', err.message);
+    initError = err;
+    // Loggear stack completo (no solo message) para ver EXACTAMENTE
+    // qué statement falló dentro de initDatabase.
+    console.error(
+      '[db] initDatabase FAILED — app continuará pero queries pueden ' +
+        'fallar. Stacktrace completo:',
+      err && err.stack ? err.stack : err
+    );
   }
   isInitialized = true;
 }
