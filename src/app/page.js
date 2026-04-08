@@ -9,6 +9,7 @@ import {
   REACTION_EMOJIS,
 } from '@/lib/constants';
 import { formatDateDisplay } from '@/lib/dates';
+import { fetchJson } from '@/lib/api';
 import useToast from '@/hooks/useToast';
 import useUsers from '@/hooks/useUsers';
 import useNotifications from '@/hooks/useNotifications';
@@ -21,6 +22,7 @@ import TaskCard from '@/components/TaskCard';
 import TaskCardSkeleton from '@/components/TaskCardSkeleton';
 import ProjectCard from '@/components/ProjectCard';
 import CelebrationOverlay from '@/components/CelebrationOverlay';
+import OfflineBadge from '@/components/OfflineBadge';
 import Toast from '@/components/modals/Toast';
 import ConfirmDialog from '@/components/modals/ConfirmDialog';
 import TaskFormModal from '@/components/modals/TaskFormModal';
@@ -291,9 +293,8 @@ export default function Home() {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch('/api/categories');
-      const data = await res.json();
-      setCategories(data);
+      const data = await fetchJson('/api/categories');
+      setCategories(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -301,8 +302,7 @@ export default function Home() {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch('/api/projects');
-      const data = await res.json();
+      const data = await fetchJson('/api/projects');
       setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -312,8 +312,7 @@ export default function Home() {
 
   const fetchArchivedProjects = async () => {
     try {
-      const res = await fetch('/api/projects?includeArchived=true');
-      const data = await res.json();
+      const data = await fetchJson('/api/projects?includeArchived=true');
       const archived = Array.isArray(data) ? data.filter(p => p.is_archived) : [];
       setArchivedProjects(archived);
     } catch (error) {
@@ -333,9 +332,8 @@ export default function Home() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch(`/api/history?userId=${currentUser.id}`);
-      const data = await res.json();
-      setHistory(data);
+      const data = await fetchJson(`/api/history?userId=${currentUser.id}`);
+      setHistory(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching history:', error);
     }
@@ -1083,6 +1081,8 @@ export default function Home() {
           onClose={() => setShowProjectModal(false)}
         />
       )}
+
+      <OfflineBadge />
 
       <Toast
         toast={toast}

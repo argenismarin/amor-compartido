@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fetchJson } from '@/lib/api';
 
 // useTasks — el hook más grande de la app. Centraliza TODO el state y la
 // lógica de tareas: listas (myTasks, assignedByOther, projectTasks,
@@ -73,9 +74,8 @@ export default function useTasks({
       }
       if (selectedCategory) params.set('categoryId', selectedCategory);
 
-      const res = await fetch(`/api/tasks?${params.toString()}`);
-      const data = await res.json();
-      setTasks(data);
+      const data = await fetchJson(`/api/tasks?${params.toString()}`);
+      setTasks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       showToast?.('Error al cargar tareas', 'error');
@@ -87,11 +87,10 @@ export default function useTasks({
   const fetchAssignedByOther = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(
+      const data = await fetchJson(
         `/api/tasks?userId=${currentUser.id}&filter=assignedByOther&excludeProjectTasks=true`
       );
-      const data = await res.json();
-      setAssignedByOther(data);
+      setAssignedByOther(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching assigned by other:', error);
       showToast?.('Error al cargar tareas asignadas', 'error');
@@ -100,8 +99,7 @@ export default function useTasks({
 
   const fetchProjectTasks = useCallback(async (projectId) => {
     try {
-      const res = await fetch(`/api/tasks?projectId=${projectId}`);
-      const data = await res.json();
+      const data = await fetchJson(`/api/tasks?projectId=${projectId}`);
       setProjectTasks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching project tasks:', error);
@@ -111,8 +109,7 @@ export default function useTasks({
 
   const fetchLooseTasks = useCallback(async () => {
     try {
-      const res = await fetch('/api/tasks?projectId=null');
-      const data = await res.json();
+      const data = await fetchJson('/api/tasks?projectId=null');
       setLooseTasks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching loose tasks:', error);

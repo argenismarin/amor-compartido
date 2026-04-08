@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fetchJson } from '@/lib/api';
 
 // useSpecialDates — gestiona aniversarios, cumpleaños y mesiversarios.
 //
@@ -20,10 +21,14 @@ export default function useSpecialDates(showToast) {
 
   const fetchSpecialDates = useCallback(async () => {
     try {
-      const res = await fetch('/api/special-dates');
-      const data = await res.json();
-      setSpecialDates(data.dates || data);
-      if (data.mesiversarioInfo) {
+      const data = await fetchJson('/api/special-dates');
+      const list = Array.isArray(data?.dates)
+        ? data.dates
+        : Array.isArray(data)
+          ? data
+          : [];
+      setSpecialDates(list);
+      if (data?.mesiversarioInfo) {
         setMesiversarioInfo(data.mesiversarioInfo);
       }
     } catch (error) {

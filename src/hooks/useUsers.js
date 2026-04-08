@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fetchJson } from '@/lib/api';
 
 // useUsers — gestiona la lista de usuarios + el usuario actual.
 //
@@ -18,14 +19,14 @@ export default function useUsers(showToast) {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      setUsers(data);
+      const data = await fetchJson('/api/users');
+      const list = Array.isArray(data) ? data : [];
+      setUsers(list);
 
       // Restaurar usuario desde localStorage o usar el primero por default
       const savedUserId = localStorage.getItem('currentUserId');
-      const savedUser = data.find((u) => u.id === parseInt(savedUserId));
-      setCurrentUser(savedUser || data[0]);
+      const savedUser = list.find((u) => u.id === parseInt(savedUserId));
+      setCurrentUser(savedUser || list[0] || null);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching users:', error);

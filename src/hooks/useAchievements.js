@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { fetchJson } from '@/lib/api';
 
 // useAchievements — fetch de la lista de logros y detección de logros nuevos.
 //
@@ -17,8 +18,7 @@ export default function useAchievements(currentUser) {
   const fetchAchievements = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const res = await fetch(`/api/achievements?userId=${currentUser.id}`);
-      const data = await res.json();
+      const data = await fetchJson(`/api/achievements?userId=${currentUser.id}`);
       if (Array.isArray(data)) {
         setAchievements(data);
       }
@@ -30,13 +30,12 @@ export default function useAchievements(currentUser) {
   const checkNewAchievements = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const res = await fetch('/api/achievements', {
+      const data = await fetchJson('/api/achievements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id }),
       });
-      const data = await res.json();
-      if (data.newAchievements && data.newAchievements.length > 0) {
+      if (data?.newAchievements && data.newAchievements.length > 0) {
         const achievement = data.newAchievements[0];
         setNewAchievement(achievement);
         setTimeout(() => setNewAchievement(null), 4000);

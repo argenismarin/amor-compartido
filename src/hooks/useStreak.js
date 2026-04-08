@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { fetchJson } from '@/lib/api';
 
 // useStreak — fetch del streak (current_streak / best_streak) de un usuario.
 //
@@ -14,9 +15,8 @@ export default function useStreak(currentUser) {
   const fetchStreak = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const res = await fetch(`/api/streaks?userId=${currentUser.id}`);
-      const data = await res.json();
-      setStreak(data);
+      const data = await fetchJson(`/api/streaks?userId=${currentUser.id}`);
+      if (data && typeof data === 'object') setStreak(data);
     } catch (error) {
       console.error('Error fetching streak:', error);
     }
