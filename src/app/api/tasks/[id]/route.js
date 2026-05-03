@@ -102,13 +102,17 @@ export async function PUT(request, { params }) {
       const today = getTodayBogota();
       const yesterdayStr = getYesterdayBogota();
       await withTransaction(async (tx) => {
+        // Tras migracion C7 (TIMESTAMPTZ), guardamos NOW() en lugar de
+        // getBogotaDate() — el motor convierte automaticamente al UTC
+        // de la columna y el AT TIME ZONE en el display lo muestra en
+        // Bogota.
         await tx.query(
           `UPDATE AppChecklist_tasks
            SET is_completed = $1,
-               completed_at = $2,
+               completed_at = CASE WHEN $1 THEN NOW() ELSE NULL END,
                updated_at = NOW()
-           WHERE id = $3`,
-          [newCompletedStatus, newCompletedStatus ? getBogotaDate() : null, id]
+           WHERE id = $2`,
+          [newCompletedStatus, id]
         );
 
         if (newCompletedStatus && task.recurrence) {

@@ -356,6 +356,52 @@ export async function initDatabase() {
     await query('INSERT INTO AppChecklist_app_usage (first_use) VALUES (CURRENT_DATE)');
   }
 
+  // C7: Migrar TIMESTAMP → TIMESTAMPTZ.
+  //
+  // Razon: el codigo legacy guardaba `getBogotaDate()` (un Date JS objeto
+  // representando "ahora en Bogota" pero serializado como UTC) en columnas
+  // TIMESTAMP. PostgreSQL lo interpretaba como timestamp sin TZ pero
+  // realmente eran "horas Bogota disfrazadas de UTC". El fix compensatorio
+  // en src/lib/dates.js (formatDateTimeDisplay) lo desplazaba al display.
+  //
+  // Migracion: cambiar las columnas a TIMESTAMPTZ. PostgreSQL convertira
+  // automaticamente los valores existentes asumiendo que estaban en la
+  // TZ de la sesion (que en Vercel es UTC). Los valores que guardamos
+  // representaban hora Bogota pero estaban marcados como UTC, asi que
+  // tras la conversion van a quedar interpretados como "Bogota +5".
+  //
+  // Para corregir esto, despues del ALTER aplicamos AT TIME ZONE
+  // 'America/Bogota' a las columnas migradas, restandoles 5 horas para
+  // que ahora SI representen el momento real.
+  //
+  // Wrap en try/catch porque si falla, el codigo legacy sigue funcionando
+  // (las columnas TIMESTAMP siguen siendo compatibles con pg driver).
+  try {
+    await query(`
+      DO $$
+      DECLARE
+        col_record RECORD;
+      BEGIN
+        -- Migrar todas las columnas timestamp a timestamptz, asumiendo
+        -- que el valor crudo era hora Bogota (UTC-5).
+        FOR col_record IN
+          SELECT table_name, column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name LIKE 'appchecklist_%'
+            AND data_type = 'timestamp without time zone'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE %I ALTER COLUMN %I TYPE TIMESTAMPTZ USING (%I AT TIME ZONE ''America/Bogota'')',
+            col_record.table_name, col_record.column_name, col_record.column_name
+          );
+        END LOOP;
+      END $$;
+    `);
+  } catch (err) {
+    console.error('[db] C7 TIMESTAMPTZ migration failed (non-fatal):', err.message);
+  }
+
   // Comments: hilo de notas/comentarios por tarea entre la pareja.
   await query(`
     CREATE TABLE IF NOT EXISTS AppChecklist_comments (
