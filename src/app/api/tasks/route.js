@@ -119,6 +119,10 @@ export async function POST(request) {
 
     // Notificar a la pareja si se le asignó la tarea (no avisar al que la creó).
     // Tareas compartidas (is_shared) → notificar al "otro" (assigned_to ya es el creador en ese caso).
+    //
+    // sendPushToUser se ejecuta NO bloqueante: el response al cliente no
+    // espera al servicio de push externo. Si falla, se loggea pero la
+    // tarea ya está creada.
     try {
       if (is_shared && assigned_by) {
         // Tarea compartida: notificar al otro usuario
@@ -127,11 +131,13 @@ export async function POST(request) {
           [assigned_by]
         );
         if (otherUser) {
-          await sendPushToUser(otherUser.id, {
+          sendPushToUser(otherUser.id, {
             title: '💕 Nueva tarea compartida',
             body: title,
             tag: `task-${result.id}`,
-          });
+          }).catch((pushErr) =>
+            console.error('Background push for shared task failed:', pushErr)
+          );
         }
       } else if (assigned_to && assigned_by && assigned_to !== assigned_by) {
         // Tarea asignada a la pareja
@@ -139,15 +145,17 @@ export async function POST(request) {
           'SELECT name FROM AppChecklist_users WHERE id = $1',
           [assigned_by]
         );
-        await sendPushToUser(assigned_to, {
+        sendPushToUser(assigned_to, {
           title: `💌 ${assigner?.name || 'Tu pareja'} te asignó una tarea`,
           body: title,
           tag: `task-${result.id}`,
-        });
+        }).catch((pushErr) =>
+          console.error('Background push for assigned task failed:', pushErr)
+        );
       }
     } catch (pushErr) {
-      // No bloquear la creación si el push falla
-      console.error('Error sending push for new task:', pushErr);
+      // No bloquear la creación si el lookup de usuario falla
+      console.error('Error preparing push for new task:', pushErr);
     }
 
     return NextResponse.json({ success: true, id: result.id });
