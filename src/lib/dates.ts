@@ -33,13 +33,28 @@ export const addDaysToToday = (days: number): string => {
 };
 
 // Parsea una fecha ISO/DATE evitando el problema de zona horaria.
-// Para fechas tipo "2024-01-15" o "2024-01-15T00:00:00", extrae los
-// componentes directamente y crea la fecha al mediodía local.
+// Acepta:
+//   - Date object (lo que devuelve pg para columnas DATE/TIMESTAMP en server-side)
+//   - string ISO/YYYY-MM-DD
+//
+// Antes: solo manejaba strings YYYY-MM-DD. Cuando se pasaba un Date
+// (ej: anniversary.date deserializada por pg), String(d).split('T')[0]
+// producia "Wed Jan 15 2020 ..." (sin T), y el parseo resultaba en NaN
+// — rompiendo formatDateDisplay y los calculos de mesiversario.
 export const parseDateSafe = (dateStr: DateInput): Date | null => {
   if (!dateStr) return null;
+  // Caso 1: ya es Date object → normalizar a mediodia local
+  if (dateStr instanceof Date) {
+    if (Number.isNaN(dateStr.getTime())) return null;
+    return new Date(dateStr.getFullYear(), dateStr.getMonth(), dateStr.getDate(), 12, 0, 0);
+  }
+  // Caso 2: string ISO o YYYY-MM-DD
   const str = String(dateStr);
   const datePart = str.split('T')[0];
-  const [year, month, day] = datePart.split('-').map(Number);
+  const parts = datePart.split('-');
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts.map(Number);
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
   return new Date(year, month - 1, day, 12, 0, 0);
 };
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, ensureDatabase } from '@/lib/db';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { logActivity } from '@/lib/activity';
 
@@ -10,6 +10,7 @@ export async function DELETE(request, { params }) {
   const limited = enforceRateLimit(request, 'DELETE /api/comments/[id]', 60, 60_000);
   if (limited) return limited;
   try {
+    await ensureDatabase();
     const { id } = await params;
     await query('DELETE FROM AppChecklist_comments WHERE id = $1', [id]);
     logActivity({

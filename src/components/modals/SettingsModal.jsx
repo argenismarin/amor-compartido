@@ -1,5 +1,21 @@
 import useFocusTrap from '@/hooks/useFocusTrap';
 
+// Extrae YYYY-MM-DD de un valor de fecha (string ISO, "YYYY-MM-DD",
+// o Date object devuelto por pg para columnas DATE). Antes hacia
+// `value?.split('T')[0]` directamente lo que crasheaba con Date objects.
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return (
+      value.getFullYear() + '-' +
+      String(value.getMonth() + 1).padStart(2, '0') + '-' +
+      String(value.getDate()).padStart(2, '0')
+    );
+  }
+  return String(value).split('T')[0];
+};
+
 // Modal de configuración: notificaciones, fechas especiales, stats y datos.
 //
 // Props:
@@ -88,8 +104,12 @@ export default function SettingsModal({
             <input
               type="date"
               className="form-input"
-              value={specialDates.find(d => d.type === 'anniversary')?.date?.split('T')[0] || ''}
-              onChange={e => onSaveSpecialDate('anniversary', e.target.value, null, 'Aniversario')}
+              value={toDateInputValue(specialDates.find(d => d.type === 'anniversary')?.date)}
+              onChange={e => {
+                // No mandar "" al endpoint (el schema lo rechaza con 400);
+                // ignorar hasta que el user elija una fecha valida.
+                if (e.target.value) onSaveSpecialDate('anniversary', e.target.value, null, 'Aniversario');
+              }}
             />
           </div>
 
@@ -113,8 +133,10 @@ export default function SettingsModal({
             <input
               type="date"
               className="form-input"
-              value={specialDates.find(d => d.type === 'birthday' && d.user_id === users[0]?.id)?.date?.split('T')[0] || ''}
-              onChange={e => onSaveSpecialDate('birthday', e.target.value, users[0]?.id)}
+              value={toDateInputValue(specialDates.find(d => d.type === 'birthday' && d.user_id === users[0]?.id)?.date)}
+              onChange={e => {
+                if (e.target.value) onSaveSpecialDate('birthday', e.target.value, users[0]?.id);
+              }}
             />
           </div>
 
@@ -123,8 +145,10 @@ export default function SettingsModal({
             <input
               type="date"
               className="form-input"
-              value={specialDates.find(d => d.type === 'birthday' && d.user_id === users[1]?.id)?.date?.split('T')[0] || ''}
-              onChange={e => onSaveSpecialDate('birthday', e.target.value, users[1]?.id)}
+              value={toDateInputValue(specialDates.find(d => d.type === 'birthday' && d.user_id === users[1]?.id)?.date)}
+              onChange={e => {
+                if (e.target.value) onSaveSpecialDate('birthday', e.target.value, users[1]?.id);
+              }}
             />
           </div>
         </div>

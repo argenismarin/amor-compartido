@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, ensureDatabase } from '@/lib/db';
 import {
   toggleSubtaskSchema,
   updateSubtaskSchema,
@@ -10,6 +10,7 @@ import {
 // body: { toggle_complete: true } o { title: '...' }
 export async function PUT(request, { params }) {
   try {
+    await ensureDatabase();
     const { id } = await params;
     const body = await request.json();
 
@@ -49,6 +50,7 @@ export async function PUT(request, { params }) {
 // DELETE /api/subtasks/[id]
 export async function DELETE(request, { params }) {
   try {
+    await ensureDatabase();
     const { id } = await params;
     await query('DELETE FROM AppChecklist_subtasks WHERE id = $1', [id]);
     return NextResponse.json({ success: true });

@@ -491,7 +491,14 @@ export default function Home() {
   const fetchHistory = async () => {
     try {
       const data = await fetchJson(`/api/history?userId=${currentUser.id}`);
-      setHistory(Array.isArray(data) ? data : []);
+      // El endpoint devuelve { tasks: [], stats: { thisWeek, total } }.
+      // Antes hacia Array.isArray(data) que siempre era false → history
+      // quedaba en [] y el modal mostraba "no hay tareas".
+      setHistory(
+        data && typeof data === 'object' && Array.isArray(data.tasks)
+          ? data
+          : { tasks: [], stats: { thisWeek: 0, total: 0 } }
+      );
     } catch (error) {
       console.error('Error fetching history:', error);
     }

@@ -4,12 +4,32 @@ import { getBogotaDate } from '@/lib/timezone';
 import { specialDateSchema, validateBody } from '@/lib/validation/schemas';
 import { enforceRateLimit } from '@/lib/rateLimit';
 
-// Helper: Parsea una fecha de forma segura (evita problemas de zona horaria)
+// Helper: Parsea una fecha de forma segura (evita problemas de zona horaria).
+// Acepta:
+//   - Date object (lo que devuelve pg para columnas DATE/TIMESTAMP)
+//   - string ISO/YYYY-MM-DD
+//   - string del Date.toString() ("Wed Jan 15 2020 00:00:00 GMT+0000")
+//
+// Antes: solo manejaba strings YYYY-MM-DD. Cuando pg devolvia un Date
+// object para `anniversary.date`, String(d).split('T')[0] producia
+// "Wed Jan 15 2020 ..." (sin T), parsearlo daba NaN, y todo el calculo
+// de mesiversarioInfo (monthsTogether, daysTogether, etc.) quedaba
+// invalido — lo que rompia el banner "X meses juntos".
 const parseDateSafe = (dateStr) => {
   if (!dateStr) return null;
+  // Caso 1: ya es Date object (pg devuelve esto para columnas DATE/TIMESTAMP).
+  // Lo normalizamos a mediodia local para evitar shifts de TZ al renderizar.
+  if (dateStr instanceof Date) {
+    if (Number.isNaN(dateStr.getTime())) return null;
+    return new Date(dateStr.getFullYear(), dateStr.getMonth(), dateStr.getDate(), 12, 0, 0);
+  }
+  // Caso 2: string ISO o YYYY-MM-DD
   const str = String(dateStr);
   const datePart = str.split('T')[0];
-  const [year, month, day] = datePart.split('-').map(Number);
+  const parts = datePart.split('-');
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts.map(Number);
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
   return new Date(year, month - 1, day, 12, 0, 0);
 };
 
