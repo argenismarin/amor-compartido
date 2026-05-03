@@ -14,29 +14,44 @@
 // Headers que setea en la respuesta cuando bloquea:
 //   X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After
 
-const buckets = new Map();
+interface Bucket {
+  count: number;
+  resetAt: number;
+}
+
+export interface RateLimitCheck {
+  allowed: boolean;
+  limit: number;
+  remaining: number;
+  resetAt: number;
+  retryAfterMs: number;
+}
+
+const buckets = new Map<string, Bucket>();
 
 // Limpia entradas expiradas cada minuto para que el Map no crezca para
-// siempre. Setlnterval no impide que el proceso termine en serverless.
+// siempre. setInterval no impide que el proceso termine en serverless.
 if (typeof globalThis.setInterval === 'function') {
-  setInterval(() => {
+  const handle = setInterval(() => {
     const now = Date.now();
     for (const [key, bucket] of buckets) {
       if (bucket.resetAt <= now) buckets.delete(key);
     }
-  }, 60_000).unref?.();
+  }, 60_000);
+  // .unref() existe solo en Node, no en Edge runtime — try/catch defensivo
+  (handle as { unref?: () => void }).unref?.();
+}
+
+export interface CheckRateLimitOpts {
+  key: string;
+  limit: number;
+  windowMs: number;
 }
 
 /**
  * Verifica si un cliente puede hacer la request.
- *
- * @param {object} opts
- * @param {string} opts.key — identificador (ej: `${ip}:${endpoint}`)
- * @param {number} opts.limit — max requests permitidos en la ventana
- * @param {number} opts.windowMs — duracion de la ventana en ms
- * @returns {{ allowed: boolean, limit: number, remaining: number, resetAt: number, retryAfterMs: number }}
  */
-export function checkRateLimit({ key, limit, windowMs }) {
+export function checkRateLimit({ key, limit, windowMs }: CheckRateLimitOpts): RateLimitCheck {
   const now = Date.now();
   let bucket = buckets.get(key);
   if (!bucket || bucket.resetAt <= now) {
@@ -58,7 +73,7 @@ export function checkRateLimit({ key, limit, windowMs }) {
  * Extrae IP del cliente desde headers de Next/Vercel/proxies comunes.
  * Fallback a 'unknown' si nada coincide (ej: tests, dev sin proxy).
  */
-export function getClientIp(request) {
+export function getClientIp(request: Request): string {
   const h = request.headers;
   return (
     h.get('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -72,7 +87,7 @@ export function getClientIp(request) {
 /**
  * Helper de respuesta 429 estandar con headers.
  */
-export function rateLimitResponse(check) {
+export function rateLimitResponse(check: RateLimitCheck): Response {
   const { limit, remaining, resetAt, retryAfterMs } = check;
   return new Response(
     JSON.stringify({ error: 'Too many requests, intenta en unos segundos' }),
@@ -97,7 +112,12 @@ export function rateLimitResponse(check) {
  *   const limit = enforceRateLimit(request, 'POST /api/tasks', 30, 60_000);
  *   if (limit) return limit;
  */
-export function enforceRateLimit(request, endpoint, limit = 30, windowMs = 60_000) {
+export function enforceRateLimit(
+  request: Request,
+  endpoint: string,
+  limit: number = 30,
+  windowMs: number = 60_000
+): Response | null {
   const ip = getClientIp(request);
   const check = checkRateLimit({ key: `${ip}:${endpoint}`, limit, windowMs });
   if (!check.allowed) return rateLimitResponse(check);

@@ -16,13 +16,30 @@ import { query } from '@/lib/db';
 //
 // El caller NO necesita await — devolvemos la promise por si quiere,
 // pero el patron normal es fire-and-forget.
-export function logActivity({ actorId = null, action, targetType, targetId = null, meta = null }) {
+
+export interface LogActivityInput {
+  actorId?: number | null;
+  action: string;
+  targetType: string;
+  targetId?: number | null;
+  meta?: Record<string, unknown> | null;
+}
+
+export function logActivity({
+  actorId = null,
+  action,
+  targetType,
+  targetId = null,
+  meta = null,
+}: LogActivityInput): Promise<void> {
   return query(
     `INSERT INTO AppChecklist_activity (actor_id, action, target_type, target_id, meta)
      VALUES ($1, $2, $3, $4, $5)`,
     [actorId, action, targetType, targetId, meta ? JSON.stringify(meta) : null]
-  ).catch((err) => {
-    // No re-lanzar: logging que falla no debe romper la operacion del usuario.
-    console.error('[activity] log failed:', err.message, { action, targetType, targetId });
-  });
+  )
+    .then(() => undefined)
+    .catch((err: Error) => {
+      // No re-lanzar: logging que falla no debe romper la operacion del usuario.
+      console.error('[activity] log failed:', err.message, { action, targetType, targetId });
+    });
 }

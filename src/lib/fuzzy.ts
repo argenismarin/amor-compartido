@@ -10,7 +10,7 @@
 // Devuelve true/false. Si en el futuro queremos rankear resultados por
 // relevancia, agregamos score; por ahora basta filtro binario.
 
-function normalize(str) {
+function normalize(str: string | null | undefined): string {
   if (!str) return '';
   return String(str)
     .toLowerCase()
@@ -20,7 +20,7 @@ function normalize(str) {
 
 // Subsecuencia: chequea si los chars de needle aparecen en haystack
 // en el mismo orden (no necesariamente contiguos).
-function isSubsequence(needle, haystack) {
+function isSubsequence(needle: string, haystack: string): boolean {
   let i = 0;
   for (let j = 0; j < haystack.length && i < needle.length; j++) {
     if (haystack[j] === needle[i]) i++;
@@ -33,12 +33,8 @@ function isSubsequence(needle, haystack) {
  *   1. Substring directo (ej: "comp" en "compras")
  *   2. Cada palabra del query es substring (ej: "lim cas" en "limpiar casa")
  *   3. Subsecuencia (ej: "comlim" en "compras de limpieza")
- *
- * @param {string} query
- * @param {string} text
- * @returns {boolean}
  */
-export function fuzzyMatch(query, text) {
+export function fuzzyMatch(query: string, text: string | null | undefined): boolean {
   if (!query || !query.trim()) return true;
   const q = normalize(query);
   const t = normalize(text);
