@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, queryOne, withTransaction, ensureDatabase } from '@/lib/db';
 import { updateProjectSchema, validateBody } from '@/lib/validation/schemas';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { logActivity } from '@/lib/activity';
 
 // La tabla AppChecklist_projects se crea en initDatabase() / ensureDatabase().
 // No hace falta una función extra acá.
@@ -138,6 +139,11 @@ export async function DELETE(request, { params }) {
     const permanent = searchParams.get('permanent') === 'true';
 
     if (permanent) {
+      // Snapshot del nombre antes de borrar para el activity log
+      const proj = await queryOne(
+        'SELECT name FROM AppChecklist_projects WHERE id = $1',
+        [id]
+      );
       // Permanent delete - tasks + project en una sola transacción.
       // Sin esto, si el primer DELETE pasa y el segundo falla, las tareas
       // quedan huérfanas (project_id apuntando a un proyecto inexistente)
@@ -145,6 +151,12 @@ export async function DELETE(request, { params }) {
       await withTransaction(async (tx) => {
         await tx.query('DELETE FROM AppChecklist_tasks WHERE project_id = $1', [id]);
         await tx.query('DELETE FROM AppChecklist_projects WHERE id = $1', [id]);
+      });
+      logActivity({
+        action: 'project.delete',
+        targetType: 'project',
+        targetId: parseInt(id, 10),
+        meta: { name: proj?.name, permanent: true },
       });
     } else {
       // Soft delete - archive the project

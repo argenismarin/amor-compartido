@@ -9,6 +9,7 @@ import {
   validateBody,
 } from '@/lib/validation/schemas';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { logActivity } from '@/lib/activity';
 
 // Helper: Calcula la siguiente fecha límite para una tarea recurrente.
 // Si la tarea tenía due_date, suma desde ahí; si no, desde hoy.
@@ -135,6 +136,14 @@ export async function PUT(request, { params }) {
             [task.assigned_to, today, yesterdayStr]
           );
         }
+      });
+
+      logActivity({
+        actorId: task.assigned_to,
+        action: newCompletedStatus ? 'task.complete' : 'task.uncomplete',
+        targetType: 'task',
+        targetId: parseInt(id, 10),
+        meta: { title: task.title },
       });
 
       // Push notifications post-commit (no transaccionales).
@@ -267,12 +276,24 @@ export async function DELETE(request, { params }) {
   if (limited) return limited;
   try {
     const { id } = await params;
+    // Snapshot el title para el activity log antes de marcar como deleted.
+    const task = await queryOne(
+      'SELECT title, assigned_by FROM AppChecklist_tasks WHERE id = $1',
+      [id]
+    );
     // Soft delete: marcar deleted_at en lugar de borrar realmente.
     // Esto permite "deshacer" desde el cliente durante un periodo corto.
     await query(
       'UPDATE AppChecklist_tasks SET deleted_at = NOW() WHERE id = $1',
       [id]
     );
+    logActivity({
+      actorId: task?.assigned_by ?? null,
+      action: 'task.delete',
+      targetType: 'task',
+      targetId: parseInt(id, 10),
+      meta: { title: task?.title },
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting task:', error);

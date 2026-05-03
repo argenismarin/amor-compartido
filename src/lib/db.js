@@ -356,6 +356,31 @@ export async function initDatabase() {
     await query('INSERT INTO AppChecklist_app_usage (first_use) VALUES (CURRENT_DATE)');
   }
 
+  // Activity log: registro de eventos importantes para auditoria y feed.
+  // - actor_id: quien hizo la accion (NULL = system/cron)
+  // - action: 'task.create' | 'task.complete' | 'task.delete' | 'task.restore' |
+  //           'project.create' | 'project.archive' | 'project.delete' | etc
+  // - target_type: 'task' | 'project' | 'subtask' | 'special_date'
+  // - target_id: id del recurso afectado (puede ser NULL si fue borrado)
+  // - meta: JSONB con info contextual (titulo previo, valores cambiados, etc)
+  // - created_at: timestamptz para ordenar correctamente cross-TZ
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_activity (
+      id SERIAL PRIMARY KEY,
+      actor_id INT NULL REFERENCES AppChecklist_users(id) ON DELETE SET NULL,
+      action VARCHAR(50) NOT NULL,
+      target_type VARCHAR(20) NOT NULL,
+      target_id INT NULL,
+      meta JSONB NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_activity_created_at ON AppChecklist_activity(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_activity_actor ON AppChecklist_activity(actor_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_target ON AppChecklist_activity(target_type, target_id);
+  `);
+
   // C5: Normalizar is_completed y is_archived a BOOLEAN puro.
   // Heredado de la migración MySQL→Postgres: algunas instalaciones tenían
   // estas columnas como SMALLINT (0/1). Convertir a BOOLEAN si es necesario.

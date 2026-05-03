@@ -3,6 +3,7 @@ import { query, queryOne, ensureDatabase } from '@/lib/db';
 import { sendPushToUser } from '@/lib/push';
 import { createTaskSchema, validateBody } from '@/lib/validation/schemas';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { logActivity } from '@/lib/activity';
 
 export async function GET(request) {
   try {
@@ -162,6 +163,14 @@ export async function POST(request) {
       // No bloquear la creación si el lookup de usuario falla
       console.error('Error preparing push for new task:', pushErr);
     }
+
+    logActivity({
+      actorId: assigned_by,
+      action: 'task.create',
+      targetType: 'task',
+      targetId: result.id,
+      meta: { title, assigned_to, is_shared, project_id },
+    });
 
     return NextResponse.json({ success: true, id: result.id });
   } catch (error) {
