@@ -576,6 +576,31 @@ export default function useTasks({
     }
   }, [updateTaskSubtasks, showToast]);
 
+  const handleSubtaskReorder = useCallback(async (taskId, order) => {
+    // Optimistic: aplicar el nuevo sort_order en el estado local antes
+    // del request. Si falla, refetch implicito en el siguiente polling.
+    updateTaskSubtasks(taskId, (prev) => {
+      const byId = new Map(prev.map((s) => [s.id, s]));
+      return order
+        .map(({ id, sort_order }) => {
+          const sub = byId.get(id);
+          return sub ? { ...sub, sort_order } : null;
+        })
+        .filter(Boolean);
+    });
+    try {
+      const res = await fetch('/api/subtasks/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, order }),
+      });
+      if (!res.ok) throw new Error('Server error');
+    } catch (err) {
+      console.error('Error reordering subtasks:', err);
+      showToast?.('Error al reordenar subtareas', 'error');
+    }
+  }, [updateTaskSubtasks, showToast]);
+
   const handleSubtaskDelete = useCallback(async (taskId, subtaskId) => {
     let removedSubtask = null;
     updateTaskSubtasks(taskId, (prev) => {
@@ -637,5 +662,6 @@ export default function useTasks({
     handleSubtaskAdd,
     handleSubtaskToggle,
     handleSubtaskDelete,
+    handleSubtaskReorder,
   };
 }

@@ -494,6 +494,7 @@ export default function Home() {
     handleSubtaskAdd,
     handleSubtaskToggle,
     handleSubtaskDelete,
+    handleSubtaskReorder,
   } = useTasks({
     currentUser,
     activeTab,
@@ -967,7 +968,7 @@ export default function Home() {
                       currentUserId={currentUser?.id}
                       assignedByName={task.assigned_by_name}
                       togglingTaskId={togglingTaskId}
-                      reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
+                      reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete} onSubtaskReorder={handleSubtaskReorder}
                     />
                   ))}
                 </div>
@@ -1235,7 +1236,7 @@ export default function Home() {
                             currentUserId={currentUser?.id}
                             assignedByName={task.assigned_by_name}
                             togglingTaskId={togglingTaskId}
-                            reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
+                            reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete} onSubtaskReorder={handleSubtaskReorder}
                           />
                         ))
                       )}
@@ -1287,7 +1288,7 @@ export default function Home() {
                           currentUserId={currentUser?.id}
                           assignedByName={task.assigned_by_name}
                           togglingTaskId={togglingTaskId}
-                          reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
+                          reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete} onSubtaskReorder={handleSubtaskReorder}
                         />
                       ))}
                     </div>
@@ -1388,7 +1389,7 @@ export default function Home() {
                     currentUserId={currentUser?.id}
                     assignedByName={task.assigned_by_name}
                     togglingTaskId={togglingTaskId}
-                    reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete}
+                    reactionEmojis={REACTION_EMOJIS} onSubtaskAdd={handleSubtaskAdd} onSubtaskToggle={handleSubtaskToggle} onSubtaskDelete={handleSubtaskDelete} onSubtaskReorder={handleSubtaskReorder}
                   />
                 ))
               )}

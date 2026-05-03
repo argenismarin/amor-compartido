@@ -705,6 +705,30 @@ body {
   color: var(--text-light);
 }
 
+.subtask-drag-handle {
+  flex-shrink: 0;
+  width: 14px;
+  font-size: 0.75rem;
+  color: var(--text-light);
+  cursor: grab;
+  opacity: 0.5;
+  user-select: none;
+  letter-spacing: -2px;
+  transition: opacity 0.15s ease;
+}
+
+.subtask-item:hover .subtask-drag-handle {
+  opacity: 0.85;
+}
+
+.subtask-drag-handle:active {
+  cursor: grabbing;
+}
+
+.subtask-item[draggable="true"]:active {
+  opacity: 0.5;
+}
+
 .subtask-checkbox {
   flex-shrink: 0;
   width: 18px;

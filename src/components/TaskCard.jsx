@@ -29,6 +29,7 @@ export default function TaskCard({
   onSubtaskAdd,
   onSubtaskToggle,
   onSubtaskDelete,
+  onSubtaskReorder,
 }) {
   const [showReactions, setShowReactions] = useState(false);
   const [sendingReaction, setSendingReaction] = useState(false);
@@ -269,9 +270,43 @@ export default function TaskCard({
           {showSubtasks && onSubtaskAdd && (
             <div className="subtasks-section">
               {hasSubtasks && (
-                <ul className="subtasks-list">
-                  {subtasks.map(sub => (
-                    <li key={sub.id} className={`subtask-item ${sub.is_completed ? 'completed' : ''}`}>
+                <ul
+                  className="subtasks-list"
+                  // Drag-and-drop nativo HTML5: cada item se puede arrastrar
+                  // a otra posicion y al soltar se llama onSubtaskReorder
+                  // (handler que vive en page.js / useTasks).
+                  onDragOver={(e) => e.preventDefault()}
+                >
+                  {subtasks.map((sub, idx) => (
+                    <li
+                      key={sub.id}
+                      className={`subtask-item ${sub.is_completed ? 'completed' : ''}`}
+                      draggable={!sub.is_completed && typeof sub.id === 'number'}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/subtask-id', String(sub.id));
+                        e.dataTransfer.setData('text/subtask-from-idx', String(idx));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const fromIdx = parseInt(e.dataTransfer.getData('text/subtask-from-idx'), 10);
+                        if (Number.isNaN(fromIdx) || fromIdx === idx) return;
+                        // Construir nuevo orden y delegar al handler
+                        const reordered = [...subtasks];
+                        const [moved] = reordered.splice(fromIdx, 1);
+                        reordered.splice(idx, 0, moved);
+                        const order = reordered.map((s, i) => ({
+                          id: s.id,
+                          sort_order: i + 1,
+                        }));
+                        onSubtaskReorder?.(task.id, order);
+                      }}
+                    >
+                      <span className="subtask-drag-handle" aria-hidden="true">⋮⋮</span>
                       <button
                         type="button"
                         className={`subtask-checkbox ${sub.is_completed ? 'checked' : ''}`}
