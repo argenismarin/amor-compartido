@@ -16,6 +16,8 @@ import useFocusTrap from '@/hooks/useFocusTrap';
 // - onImportData: (file: File) => void — importa desde un archivo JSON
 // - theme: 'light' | 'dark' | 'auto' — preferencia actual
 // - onSetTheme: (theme) => void — handler del picker
+// - lang: 'es' | 'en' — idioma actual
+// - onSetLang: (lang) => void — handler del picker de idioma
 // - onClose: cerrar el modal
 export default function SettingsModal({
   users,
@@ -32,6 +34,8 @@ export default function SettingsModal({
   onImportData,
   theme,
   onSetTheme,
+  lang,
+  onSetLang,
   onClose,
 }) {
   const containerRef = useFocusTrap(onClose);
@@ -143,6 +147,31 @@ export default function SettingsModal({
                 aria-checked={theme === opt.value}
                 className={`theme-option ${theme === opt.value ? 'selected' : ''}`}
                 onClick={() => onSetTheme?.(opt.value)}
+              >
+                <span className="theme-option-icon" aria-hidden="true">{opt.icon}</span>
+                <span>{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h3 className="settings-section-title">🌐 Idioma</h3>
+          <p className="settings-section-desc">
+            Elige el idioma de la app.
+          </p>
+          <div className="theme-picker" role="radiogroup" aria-label="Selección de idioma">
+            {[
+              { value: 'es', label: 'Español', icon: '🇨🇴' },
+              { value: 'en', label: 'English', icon: '🇬🇧' },
+            ].map((opt) => (
+              <button
+                type="button"
+                key={opt.value}
+                role="radio"
+                aria-checked={lang === opt.value}
+                className={`theme-option ${lang === opt.value ? 'selected' : ''}`}
+                onClick={() => onSetLang?.(opt.value)}
               >
                 <span className="theme-option-icon" aria-hidden="true">{opt.icon}</span>
                 <span>{opt.label}</span>

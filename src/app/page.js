@@ -20,6 +20,7 @@ import useSpecialDates from '@/hooks/useSpecialDates';
 import usePolling from '@/hooks/usePolling';
 import useTasks from '@/hooks/useTasks';
 import useTheme from '@/hooks/useTheme';
+import useI18n from '@/hooks/useI18n';
 import useInstallPrompt from '@/hooks/useInstallPrompt';
 import TaskCard from '@/components/TaskCard';
 import TaskCardSkeleton from '@/components/TaskCardSkeleton';
@@ -129,6 +130,9 @@ export default function Home() {
 
   // Theme picker (light/dark/auto, persiste en localStorage)
   const { theme, setTheme } = useTheme();
+
+  // i18n (es/en, persiste en localStorage)
+  const { lang, setLang } = useI18n();
 
   // PWA install prompt (captura beforeinstallprompt, ofrece banner)
   const { isInstallable, promptInstall, dismiss: dismissInstall } = useInstallPrompt();
@@ -1522,6 +1526,8 @@ export default function Home() {
           onImportData={handleImportData}
           theme={theme}
           onSetTheme={setTheme}
+          lang={lang}
+          onSetLang={setLang}
           onClose={() => setShowSettingsModal(false)}
         />
       )}
