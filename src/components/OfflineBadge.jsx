@@ -1,18 +1,30 @@
 'use client';
 
-import useOnlineStatus from '@/hooks/useOnlineStatus';
-
 // Badge fijo en la parte superior que aparece SOLO cuando el navegador
-// está offline. No es intrusivo: es un aviso pasivo para que el usuario
-// sepa que sus cambios quedarán locales (optimistic updates) hasta que
-// vuelva la conexión.
+// está offline. Tambien muestra el contador de mutations pendientes
+// (M6 offline-first) si hay cosas encoladas.
 //
-// Pensado como componente "mount-and-forget": una sola instancia en
-// page.js basta.
-export default function OfflineBadge() {
-  const isOnline = useOnlineStatus();
+// Recibe { isOnline, pendingCount } como props para evitar duplicar la
+// suscripcion al hook (page.js ya lo monta una vez para sync handler).
+export default function OfflineBadge({ isOnline, pendingCount = 0 }) {
+  // Si esta online y no hay pendientes, no renderizamos nada
+  if (isOnline && pendingCount === 0) return null;
 
-  if (isOnline) return null;
+  // Online + pendientes: el sync ya se disparo (handleOnline en
+  // useOnlineStatus). Mostrar badge transitorio mientras procesa.
+  if (isOnline) {
+    return (
+      <div
+        className="offline-badge"
+        role="status"
+        aria-live="polite"
+        style={{ background: 'var(--success)' }}
+      >
+        <span className="offline-badge-icon" aria-hidden="true">🔄</span>
+        <span>Sincronizando {pendingCount} {pendingCount === 1 ? 'cambio' : 'cambios'}…</span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -22,7 +34,10 @@ export default function OfflineBadge() {
       aria-label="Sin conexión a internet"
     >
       <span className="offline-badge-icon" aria-hidden="true">📡</span>
-      <span>Sin conexión — tus cambios se guardarán al reconectarte</span>
+      <span>
+        Sin conexión
+        {pendingCount > 0 && ` — ${pendingCount} ${pendingCount === 1 ? 'cambio pendiente' : 'cambios pendientes'}`}
+      </span>
     </div>
   );
 }

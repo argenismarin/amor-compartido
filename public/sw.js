@@ -1,10 +1,12 @@
 // Service Worker para Amor Compartido
 // Maneja notificaciones push y cache básico
 
-const CACHE_NAME = 'amor-compartido-v3';
+const CACHE_NAME = 'amor-compartido-v4';
 const urlsToCache = [
+  '/',
+  '/manifest.json',
   '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
 ];
 
 // NO cachear archivos de Next.js (_next/) para evitar problemas de versiones
@@ -71,20 +73,45 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - network first for dynamic content, cache for static assets
+// Fetch event - network first for dynamic content, cache for static assets.
+//
+// M6 (offline-first): para requests de navegacion (HTML), intentamos
+// network primero pero degradamos a cached '/' si no hay red. Asi la
+// app abre offline mostrando el shell, y los datos los toma del
+// optimistic state local + offline queue (ver src/lib/offlineQueue.js).
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Never cache Next.js build files or API calls - always go to network
-  if (url.pathname.startsWith('/_next/') || url.pathname.startsWith('/api/')) {
+  // APIs nunca van por cache; tienen su propio offline queue
+  if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // For other requests, try cache first, then network
+  // Build files de Next: directo a red (varian por hash)
+  if (url.pathname.startsWith('/_next/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Navegacion (HTML): network-first con fallback al shell cacheado
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          // Cachear copia para offline (clone porque body se consume)
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/', copy)).catch(() => {});
+          return res;
+        })
+        .catch(() => caches.match('/').then((m) => m || caches.match(event.request)))
+    );
+    return;
+  }
+
+  // Resto (estaticos, imagenes): cache-first
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => response || fetch(event.request))
+    caches.match(event.request).then((response) => response || fetch(event.request))
   );
 });
 

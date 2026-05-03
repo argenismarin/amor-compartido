@@ -28,6 +28,7 @@ import ProjectCard from '@/components/ProjectCard';
 import CelebrationOverlay from '@/components/CelebrationOverlay';
 import OfflineBadge from '@/components/OfflineBadge';
 import InstallPromptBanner from '@/components/InstallPromptBanner';
+import useOnlineStatus from '@/hooks/useOnlineStatus';
 import Toast from '@/components/modals/Toast';
 import ConfirmDialog from '@/components/modals/ConfirmDialog';
 import TaskFormModal from '@/components/modals/TaskFormModal';
@@ -136,6 +137,29 @@ export default function Home() {
 
   // PWA install prompt (captura beforeinstallprompt, ofrece banner)
   const { isInstallable, promptInstall, dismiss: dismissInstall } = useInstallPrompt();
+
+  // Online status + offline mutation queue sync (M6).
+  // El handler onSyncComplete recibe { sent, failed, conflicts } y
+  // muestra toast con el resultado al usuario.
+  const handleSyncComplete = useCallback(
+    (result) => {
+      if (!result) return;
+      const { sent, conflicts, failed } = result;
+      if (sent > 0 && failed === 0 && conflicts === 0) {
+        showToast(`✅ Sincronizados ${sent} ${sent === 1 ? 'cambio' : 'cambios'}`);
+      } else if (conflicts > 0) {
+        showToast(
+          `Sincronizados ${sent}, ${conflicts} descartados por conflicto con tu pareja`,
+          'info',
+          { duration: 5000 }
+        );
+      } else if (failed > 0) {
+        showToast(`Algunos cambios no se pudieron sincronizar (${failed})`, 'error');
+      }
+    },
+    [showToast]
+  );
+  const { isOnline, pendingCount } = useOnlineStatus(handleSyncComplete);
 
   // Project templates state
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
@@ -1467,7 +1491,7 @@ export default function Home() {
         />
       )}
 
-      <OfflineBadge />
+      <OfflineBadge isOnline={isOnline} pendingCount={pendingCount} />
 
       <InstallPromptBanner
         isInstallable={isInstallable}

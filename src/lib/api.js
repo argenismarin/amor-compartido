@@ -21,6 +21,14 @@
 // se consideran problemas del cliente y NO se reintentan.
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
+// Helpers offline-first (M6). Importan dinamicamente para no bloquear
+// el SSR ni cargar IndexedDB en GETs simples.
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function isOffline() {
+  return typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine;
+}
+
 /**
  * Hace un fetch y devuelve el JSON parseado. Tira un Error si el
  * status no está en el rango 2xx.
@@ -35,7 +43,24 @@ const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
  * @throws {Error} con propiedad `.status` si el server respondió !ok después de los retries
  */
 export async function fetchJson(url, init = {}) {
-  const { retries = 2, retryBaseMs = 400, ...fetchInit } = init;
+  const { retries = 2, retryBaseMs = 400, queueIfOffline = false, ...fetchInit } = init;
+  const method = (fetchInit.method || 'GET').toUpperCase();
+
+  // Offline-first: si el caller marca queueIfOffline=true y estamos
+  // sin conexion, encolar la mutation en IndexedDB y devolver respuesta
+  // optimista. El sync (drainQueue) ocurre cuando vuelve 'online'.
+  // GETs nunca se encolan — no tiene sentido reproducir lecturas.
+  if (queueIfOffline && MUTATING_METHODS.has(method) && isOffline()) {
+    const { enqueue } = await import('@/lib/offlineQueue');
+    const id = await enqueue({
+      method,
+      url,
+      body: fetchInit.body,
+      headers: fetchInit.headers,
+    });
+    return { queued: true, queueId: id };
+  }
+
   let lastError;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
