@@ -122,6 +122,27 @@ export default function Home() {
   // Theme picker (light/dark/auto, persiste en localStorage)
   const { theme, setTheme } = useTheme();
 
+  // Deep link state: si la URL trae ?task=N o ?project=N (porque vino
+  // redirigida desde /task/[id] o /project/[id]), recordamos el id para
+  // que un useEffect mas abajo abra el modal/proyecto cuando los datos
+  // esten cargados. Solo se hace una vez por carga de pagina — luego
+  // limpiamos el query param para que refrescos no re-disparen la
+  // accion accidentalmente.
+  const [pendingTaskDeepLink, setPendingTaskDeepLink] = useState(null);
+  const [pendingProjectDeepLink, setPendingProjectDeepLink] = useState(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get('task');
+    const projectId = params.get('project');
+    if (taskId) setPendingTaskDeepLink(parseInt(taskId, 10));
+    if (projectId) setPendingProjectDeepLink(parseInt(projectId, 10));
+    if (taskId || projectId) {
+      // Limpiar la URL para que el deep link no se re-procese al cambiar tab.
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
 
   // Search & sort state
   const [searchQuery, setSearchQuery] = useState('');
@@ -391,6 +412,29 @@ export default function Home() {
     getRandomMessage,
     refreshProjects: fetchProjects,
   });
+
+  // Resolver deep links cuando los datos esten cargados.
+  // tasks deep link: cuando llegan tasks, buscamos el id y abrimos el modal.
+  useEffect(() => {
+    if (!pendingTaskDeepLink || !tasks || tasks.length === 0) return;
+    const allLists = [...tasks, ...assignedByOther, ...projectTasks, ...looseTasks];
+    const target = allLists.find((t) => t.id === pendingTaskDeepLink);
+    if (target) {
+      openEditTask(target);
+      setPendingTaskDeepLink(null);
+    }
+  }, [pendingTaskDeepLink, tasks, assignedByOther, projectTasks, looseTasks, openEditTask]);
+
+  // project deep link: cuando llegan projects, switch tab y selectedProject
+  useEffect(() => {
+    if (!pendingProjectDeepLink || !projects || projects.length === 0) return;
+    const target = projects.find((p) => p.id === pendingProjectDeepLink);
+    if (target) {
+      setActiveTab('projects');
+      setSelectedProject(target.id);
+      setPendingProjectDeepLink(null);
+    }
+  }, [pendingProjectDeepLink, projects]);
 
   // Polling: refresca cada 5s. Solo fetch de projects cuando estás en
   // esa tab — antes corría siempre y consumía ancho de banda + DB sin
