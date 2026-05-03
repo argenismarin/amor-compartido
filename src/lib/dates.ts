@@ -9,22 +9,24 @@
 
 export const TIMEZONE = 'America/Bogota';
 
+type DateInput = string | Date | null | undefined;
+
 // Devuelve la fecha/hora actual en zona horaria de Bogotá
-export const getBogotaDate = () => {
+export const getBogotaDate = (): Date => {
   return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
 };
 
 // Formatea una fecha como YYYY-MM-DD
-export const toDateString = (date) =>
+export const toDateString = (date: Date): string =>
   date.getFullYear() + '-' +
   String(date.getMonth() + 1).padStart(2, '0') + '-' +
   String(date.getDate()).padStart(2, '0');
 
 // Devuelve la fecha de hoy en formato YYYY-MM-DD (Bogotá)
-export const getTodayString = () => toDateString(getBogotaDate());
+export const getTodayString = (): string => toDateString(getBogotaDate());
 
 // Devuelve una fecha relativa a hoy (Bogotá) en formato YYYY-MM-DD
-export const addDaysToToday = (days) => {
+export const addDaysToToday = (days: number): string => {
   const d = getBogotaDate();
   d.setDate(d.getDate() + days);
   return toDateString(d);
@@ -33,7 +35,7 @@ export const addDaysToToday = (days) => {
 // Parsea una fecha ISO/DATE evitando el problema de zona horaria.
 // Para fechas tipo "2024-01-15" o "2024-01-15T00:00:00", extrae los
 // componentes directamente y crea la fecha al mediodía local.
-export const parseDateSafe = (dateStr) => {
+export const parseDateSafe = (dateStr: DateInput): Date | null => {
   if (!dateStr) return null;
   const str = String(dateStr);
   const datePart = str.split('T')[0];
@@ -42,7 +44,10 @@ export const parseDateSafe = (dateStr) => {
 };
 
 // Formatea una fecha para mostrar (sin hora)
-export const formatDateDisplay = (dateStr, options = { day: 'numeric', month: 'short' }) => {
+export const formatDateDisplay = (
+  dateStr: DateInput,
+  options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+): string => {
   const date = parseDateSafe(dateStr);
   if (!date) return '';
   return date.toLocaleDateString('es-CO', options);
@@ -50,16 +55,21 @@ export const formatDateDisplay = (dateStr, options = { day: 'numeric', month: 's
 
 // Formatea una fecha con hora para mostrar.
 //
-// Tras la migracion C7 a TIMESTAMPTZ (ver src/lib/db.js), las columnas
+// Tras la migracion C7 a TIMESTAMPTZ (ver src/lib/db.ts), las columnas
 // timestamp guardan correctamente el momento UTC absoluto. Aca usamos
 // timeZone: 'America/Bogota' explicitamente para mostrarlo siempre en
 // hora Bogota independiente del browser del cliente.
 export const formatDateTimeDisplay = (
-  dateStr,
-  options = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
-) => {
+  dateStr: DateInput,
+  options: Intl.DateTimeFormatOptions = {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }
+): string => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
+  const date = new Date(dateStr as string);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleString('es-CO', { ...options, timeZone: TIMEZONE });
 };
