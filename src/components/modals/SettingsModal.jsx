@@ -14,6 +14,8 @@ import useFocusTrap from '@/hooks/useFocusTrap';
 // - onSaveSpecialDate: (type, date, userId, label) => void
 // - onExportData: () => void — descarga JSON con todos los datos
 // - onImportData: (file: File) => void — importa desde un archivo JSON
+// - theme: 'light' | 'dark' | 'auto' — preferencia actual
+// - onSetTheme: (theme) => void — handler del picker
 // - onClose: cerrar el modal
 export default function SettingsModal({
   users,
@@ -28,6 +30,8 @@ export default function SettingsModal({
   onSaveSpecialDate,
   onExportData,
   onImportData,
+  theme,
+  onSetTheme,
   onClose,
 }) {
   const containerRef = useFocusTrap(onClose);
@@ -118,6 +122,32 @@ export default function SettingsModal({
               value={specialDates.find(d => d.type === 'birthday' && d.user_id === users[1]?.id)?.date?.split('T')[0] || ''}
               onChange={e => onSaveSpecialDate('birthday', e.target.value, users[1]?.id)}
             />
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h3 className="settings-section-title">🎨 Tema</h3>
+          <p className="settings-section-desc">
+            Elige cómo se ve la app. &quot;Auto&quot; sigue tu preferencia del sistema.
+          </p>
+          <div className="theme-picker" role="radiogroup" aria-label="Selección de tema">
+            {[
+              { value: 'light', label: 'Claro', icon: '☀️' },
+              { value: 'auto', label: 'Auto', icon: '🌓' },
+              { value: 'dark', label: 'Oscuro', icon: '🌙' },
+            ].map((opt) => (
+              <button
+                type="button"
+                key={opt.value}
+                role="radio"
+                aria-checked={theme === opt.value}
+                className={`theme-option ${theme === opt.value ? 'selected' : ''}`}
+                onClick={() => onSetTheme?.(opt.value)}
+              >
+                <span className="theme-option-icon" aria-hidden="true">{opt.icon}</span>
+                <span>{opt.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 

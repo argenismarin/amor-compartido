@@ -18,6 +18,7 @@ import useAchievements from '@/hooks/useAchievements';
 import useSpecialDates from '@/hooks/useSpecialDates';
 import usePolling from '@/hooks/usePolling';
 import useTasks from '@/hooks/useTasks';
+import useTheme from '@/hooks/useTheme';
 import TaskCard from '@/components/TaskCard';
 import TaskCardSkeleton from '@/components/TaskCardSkeleton';
 import ProjectCard from '@/components/ProjectCard';
@@ -117,6 +118,9 @@ export default function Home() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const { specialDates, todaySpecialDate, mesiversarioInfo, saveSpecialDate } =
     useSpecialDates(showToast);
+
+  // Theme picker (light/dark/auto, persiste en localStorage)
+  const { theme, setTheme } = useTheme();
 
 
   // Search & sort state
@@ -1278,6 +1282,8 @@ export default function Home() {
           onSaveSpecialDate={saveSpecialDate}
           onExportData={handleExportData}
           onImportData={handleImportData}
+          theme={theme}
+          onSetTheme={setTheme}
           onClose={() => setShowSettingsModal(false)}
         />
       )}

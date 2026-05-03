@@ -3968,3 +3968,135 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================
+   MANUAL THEME OVERRIDE (data-theme)
+   ============================================
+   El bloque @media (prefers-color-scheme: dark) en líneas 2528+ aplica
+   dark mode cuando el OS lo prefiere. Este bloque permite al usuario
+   forzar light/dark independiente del OS via useTheme hook (que setea
+   data-theme="light" o "dark" en <html>).
+
+   Estrategia: cuando data-theme está presente, las reglas dark del @media
+   se replican aquí con selector [data-theme="dark"] (mayor especificidad
+   que :root vars, vence al media query). Para light explícito hay que
+   re-declarar las vars con sus valores claros.
+*/
+
+html[data-theme="light"]:root,
+html[data-theme="light"] {
+  --background: #FFFFFF;
+  --surface: #FAFAFA;
+  --text: #333333;
+  --text-light: #555555;
+  --border: #E0E0E0;
+}
+
+html[data-theme="dark"]:root,
+html[data-theme="dark"] {
+  --background: #1a1a1a;
+  --surface: #262626;
+  --text: #f5f5f5;
+  --text-light: #b0b0b0;
+  --border: #404040;
+}
+
+/* Las reglas de componentes en @media (prefers-color-scheme: dark) no
+   re-aplican cuando el usuario fuerza dark via data-theme. Replicamos
+   los overrides críticos. Para mantener este bloque manejable, solo
+   replicamos las reglas que cambian background/color (no los gradientes
+   complejos que ya usan vars). */
+
+html[data-theme="dark"] body {
+  background: var(--background);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .task-card,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .confirm-dialog,
+html[data-theme="dark"] .achievement-unlock-modal,
+html[data-theme="dark"] .project-card,
+html[data-theme="dark"] .project-header-detail,
+html[data-theme="dark"] .add-project-card,
+html[data-theme="dark"] .archived-project-card,
+html[data-theme="dark"] .archived-projects-toggle,
+html[data-theme="dark"] .notification-btn,
+html[data-theme="dark"] .task-card-skeleton {
+  background: var(--surface);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .form-input,
+html[data-theme="dark"] .form-textarea,
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] .priority-option,
+html[data-theme="dark"] .assign-option,
+html[data-theme="dark"] .category-option,
+html[data-theme="dark"] .recurrence-option,
+html[data-theme="dark"] .emoji-option,
+html[data-theme="dark"] .project-option,
+html[data-theme="dark"] .category-chip,
+html[data-theme="dark"] .reaction-btn,
+html[data-theme="dark"] .task-action-btn,
+html[data-theme="dark"] .modal-close,
+html[data-theme="dark"] .data-btn,
+html[data-theme="dark"] .settings-stat,
+html[data-theme="dark"] .confirm-btn-cancel {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+html[data-theme="dark"] .progress-bar-container,
+html[data-theme="dark"] .project-progress-bar,
+html[data-theme="dark"] .project-card-progress-bar {
+  background: var(--border);
+}
+
+/* Theme picker UI */
+.theme-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.theme-option {
+  flex: 1;
+  padding: 12px 8px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.theme-option:hover {
+  border-color: var(--primary);
+}
+
+.theme-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+[data-user="argenis"] .theme-option:hover,
+[data-user="argenis"] .theme-option.selected {
+  border-color: var(--burgundy);
+  background: var(--burgundy-light);
+  color: var(--burgundy);
+}
+
+.theme-option-icon {
+  font-size: 1.4rem;
+}
