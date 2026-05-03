@@ -21,6 +21,15 @@ const eslintConfig = defineConfig([
       // a veces no, lo que rompe CI inesperadamente. La desactivamos
       // hasta que tenga sentido migrar a RSC / React Query / SWR.
       "react-hooks/set-state-in-effect": "off",
+
+      // Funciones/variables no definidas son ERROR (no warning). Esta
+      // regla habría detectado el bug del refactor 3ade9dd donde
+      // openNewProject/openEditProject/etc quedaron referenciadas en
+      // page.js sin definición — ReferenceError en runtime al hacer
+      // click en proyectos. Con max-warnings=0 + esto en error, CI
+      // bloquea el merge antes de que llegue a prod.
+      "no-undef": "error",
+      "react/jsx-no-undef": "error",
     },
   },
 ]);
