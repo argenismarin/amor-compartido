@@ -61,16 +61,15 @@ export async function PUT(request, { params }) {
       // is_completed es BOOLEAN puro (normalizado por la migración en db.js)
       const newCompletedStatus = !task.is_completed;
 
-      // Envolvemos UPDATE + (opcional) INSERT recurrente en una sola
-      // transacción. Si el INSERT recurrente falla, revertimos también
-      // el toggle para no dejar la tarea "completa pero sin siguiente
-      // instancia" — un estado inconsistente que antes se tragaba en
-      // silencio dentro de un try/catch.
+      // Envolvemos UPDATE + (opcional) INSERT recurrente + streak update
+      // en una sola transacción. Si cualquier step falla, todo se revierte
+      // para no dejar la tarea "completa pero sin siguiente instancia" o
+      // con un streak desactualizado.
       //
-      // updateStreak y push notifications quedan FUERA de la transacción:
-      // son efectos secundarios (streak es otra tabla con su propia
-      // tolerancia a fallos; push es externo) y no deben tumbar el
-      // commit principal si fallan.
+      // Push notifications quedan FUERA de la transacción: son efectos
+      // externos y no deben tumbar el commit principal si fallan.
+      const today = getTodayBogota();
+      const yesterdayStr = getYesterdayBogota();
       await withTransaction(async (tx) => {
         await tx.query(
           `UPDATE AppChecklist_tasks
@@ -95,24 +94,60 @@ export async function PUT(request, { params }) {
             );
           }
         }
+
+        // Streak update atómico dentro de la transacción.
+        //
+        // Antes era un read-then-write en updateStreak() que vivía fuera
+        // del withTransaction: dos toggles concurrentes podían leer el
+        // mismo last_activity y pisarse, dejando current_streak en 1
+        // cuando debía ser 2. Ahora es un único INSERT ... ON CONFLICT
+        // DO UPDATE con CASE SQL, que el motor garantiza atómico.
+        //
+        // - Si last_activity = today → no incrementamos (ya contó hoy)
+        // - Si last_activity = yesterday → +1 (continuó la racha)
+        // - Cualquier otra cosa → reset a 1 (rompió la racha)
+        // - best_streak siempre es GREATEST(actual, nuevo)
+        if (newCompletedStatus) {
+          await tx.query(
+            `INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity)
+             VALUES ($1, 1, 1, $2)
+             ON CONFLICT (user_id) DO UPDATE SET
+               current_streak = CASE
+                 WHEN AppChecklist_streaks.last_activity = $2 THEN AppChecklist_streaks.current_streak
+                 WHEN AppChecklist_streaks.last_activity = $3 THEN AppChecklist_streaks.current_streak + 1
+                 ELSE 1
+               END,
+               best_streak = GREATEST(
+                 AppChecklist_streaks.best_streak,
+                 CASE
+                   WHEN AppChecklist_streaks.last_activity = $2 THEN AppChecklist_streaks.current_streak
+                   WHEN AppChecklist_streaks.last_activity = $3 THEN AppChecklist_streaks.current_streak + 1
+                   ELSE 1
+                 END
+               ),
+               last_activity = $2,
+               updated_at = NOW()`,
+            [task.assigned_to, today, yesterdayStr]
+          );
+        }
       });
 
-      // Efectos secundarios post-commit (no transaccionales)
+      // Push notifications post-commit (no transaccionales).
       if (newCompletedStatus) {
-        await updateStreak(task.assigned_to);
-
-        // Notificar al que asignó la tarea (si es la pareja, no avisar al mismo)
         try {
           if (task.assigned_by && task.assigned_by !== task.assigned_to) {
             const completer = await queryOne(
               'SELECT name FROM AppChecklist_users WHERE id = $1',
               [task.assigned_to]
             );
-            await sendPushToUser(task.assigned_by, {
+            // No bloqueante: si el push falla, el toggle ya está commiteado.
+            sendPushToUser(task.assigned_by, {
               title: `🎉 ${completer?.name || 'Tu pareja'} completó una tarea`,
               body: task.title,
               tag: `task-done-${id}`,
-            });
+            }).catch((pushErr) =>
+              console.error('Background push for completion failed:', pushErr)
+            );
           }
         } catch (pushErr) {
           console.error('Error sending push for completion:', pushErr);
@@ -131,7 +166,8 @@ export async function PUT(request, { params }) {
         [validation.data.reaction || null, id]
       );
 
-      // Notificar al usuario que completó la tarea de la reacción recibida
+      // Notificar al usuario que completó la tarea de la reacción recibida.
+      // Push no bloqueante: el response al cliente no espera al servicio externo.
       try {
         if (body.reaction) {
           const task = await queryOne(
@@ -143,15 +179,17 @@ export async function PUT(request, { params }) {
               'SELECT name FROM AppChecklist_users WHERE id = $1',
               [task.assigned_by]
             );
-            await sendPushToUser(task.assigned_to, {
+            sendPushToUser(task.assigned_to, {
               title: `${body.reaction} ${reactor?.name || 'Tu pareja'} reaccionó a tu tarea`,
               body: task.title,
               tag: `reaction-${id}`,
-            });
+            }).catch((pushErr) =>
+              console.error('Background push for reaction failed:', pushErr)
+            );
           }
         }
       } catch (pushErr) {
-        console.error('Error sending push for reaction:', pushErr);
+        console.error('Error preparing push for reaction:', pushErr);
       }
 
       return NextResponse.json({ success: true });
@@ -216,52 +254,6 @@ export async function PUT(request, { params }) {
   } catch (error) {
     console.error('Error updating task:', error);
     return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
-  }
-}
-
-async function updateStreak(userId) {
-  try {
-    const today = getTodayBogota();
-    const yesterdayStr = getYesterdayBogota();
-
-    // Simple approach: first check if streak exists
-    const existingStreak = await queryOne(
-      'SELECT * FROM AppChecklist_streaks WHERE user_id = $1',
-      [userId]
-    );
-
-    if (!existingStreak) {
-      // Create new streak
-      await query(
-        'INSERT INTO AppChecklist_streaks (user_id, current_streak, best_streak, last_activity) VALUES ($1, 1, 1, $2)',
-        [userId, today]
-      );
-    } else {
-      // Extraer la fecha de last_activity de forma segura (sin problemas de zona horaria)
-      const lastActivity = existingStreak.last_activity
-        ? String(existingStreak.last_activity).split('T')[0]
-        : null;
-
-      if (lastActivity === today) {
-        // Already updated today, do nothing
-        return;
-      }
-
-      let newStreak = 1;
-      if (lastActivity === yesterdayStr) {
-        newStreak = existingStreak.current_streak + 1;
-      }
-
-      const newBest = Math.max(newStreak, existingStreak.best_streak);
-
-      await query(
-        'UPDATE AppChecklist_streaks SET current_streak = $1, best_streak = $2, last_activity = $3, updated_at = NOW() WHERE user_id = $4',
-        [newStreak, newBest, today, userId]
-      );
-    }
-  } catch (error) {
-    console.error('Error updating streak:', error);
-    // Don't rethrow - streak update failure shouldn't break task toggle
   }
 }
 
