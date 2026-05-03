@@ -4054,6 +4054,97 @@ html[data-theme="dark"] .project-card-progress-bar {
   background: var(--border);
 }
 
+/* Advanced filters (M7) */
+.filter-toggle {
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--border);
+  background: white;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.filter-toggle:hover {
+  border-color: var(--primary);
+}
+
+.filter-toggle.has-active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+[data-user="argenis"] .filter-toggle.has-active {
+  background: var(--burgundy);
+  border-color: var(--burgundy);
+}
+
+.advanced-filters {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.advanced-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.advanced-filter-label {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.filter-chip {
+  padding: 5px 10px;
+  border: 1.5px solid var(--border);
+  background: white;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.filter-chip:hover {
+  border-color: var(--primary);
+}
+
+.filter-chip.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+[data-user="argenis"] .filter-chip.active {
+  background: var(--burgundy);
+  border-color: var(--burgundy);
+}
+
+html[data-theme="dark"] .filter-toggle,
+html[data-theme="dark"] .filter-chip,
+html[data-theme="dark"] .advanced-filters {
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* Project templates picker */
 .templates-modal {
   max-width: 520px;

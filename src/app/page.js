@@ -9,6 +9,7 @@ import {
   REACTION_EMOJIS,
 } from '@/lib/constants';
 import { formatDateDisplay } from '@/lib/dates';
+import { fuzzyMatch } from '@/lib/fuzzy';
 import { fetchJson } from '@/lib/api';
 import useToast from '@/hooks/useToast';
 import useUsers from '@/hooks/useUsers';
@@ -206,6 +207,13 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('default');
 
+  // Filtros avanzados — null = sin filtro
+  // dateFilter: 'today' | 'overdue' | 'week' | null
+  // assigneeFilter: userId | 'shared' | null
+  const [dateFilter, setDateFilter] = useState(null);
+  const [assigneeFilter, setAssigneeFilter] = useState(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
 
   // Restaurar preferencia de ordenamiento
   useEffect(() => {
@@ -218,19 +226,50 @@ export default function Home() {
     localStorage.setItem('sortBy', value);
   }, []);
 
-  // Aplica búsqueda + ordenamiento a una lista de tareas, manteniendo
-  // incompletas primero como invariante.
+  // Aplica búsqueda + filtros + ordenamiento a una lista de tareas,
+  // manteniendo incompletas primero como invariante.
   const filterAndSortTasks = useCallback((list) => {
     if (!Array.isArray(list)) return [];
     let result = list;
 
-    // Búsqueda por título o descripción (case-insensitive)
+    // Búsqueda fuzzy por título o descripción (acentos, subsecuencia,
+    // multi-word). Ver src/lib/fuzzy.js.
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(t =>
-        (t.title || '').toLowerCase().includes(q) ||
-        (t.description || '').toLowerCase().includes(q)
+      result = result.filter(
+        (t) => fuzzyMatch(searchQuery, t.title) || fuzzyMatch(searchQuery, t.description || '')
       );
+    }
+
+    // Filtro por fecha
+    if (dateFilter) {
+      const now = new Date();
+      const todayStr =
+        now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      const weekFromNow = new Date(now);
+      weekFromNow.setDate(now.getDate() + 7);
+      const weekStr =
+        weekFromNow.getFullYear() + '-' +
+        String(weekFromNow.getMonth() + 1).padStart(2, '0') + '-' +
+        String(weekFromNow.getDate()).padStart(2, '0');
+
+      result = result.filter((t) => {
+        const due = t.due_date ? String(t.due_date).slice(0, 10) : null;
+        if (dateFilter === 'today') return due === todayStr;
+        if (dateFilter === 'overdue') return due && due < todayStr && !t.is_completed;
+        if (dateFilter === 'week') return due && due >= todayStr && due <= weekStr;
+        return true;
+      });
+    }
+
+    // Filtro por asignado
+    if (assigneeFilter !== null) {
+      if (assigneeFilter === 'shared') {
+        result = result.filter((t) => t.is_shared);
+      } else {
+        result = result.filter((t) => t.assigned_to === assigneeFilter);
+      }
     }
 
     // Ordenamiento (manteniendo incompletas primero)
@@ -259,7 +298,7 @@ export default function Home() {
     }
 
     return result;
-  }, [searchQuery, sortBy]);
+  }, [searchQuery, sortBy, dateFilter, assigneeFilter]);
 
   // Get random motivational message
   const getRandomMessage = useCallback(() => {
@@ -996,7 +1035,67 @@ export default function Home() {
                 <option value="alphabetical">A-Z</option>
                 <option value="created">Más recientes</option>
               </select>
+              <button
+                type="button"
+                className={`filter-toggle ${(dateFilter || assigneeFilter !== null) ? 'has-active' : ''}`}
+                onClick={() => setShowAdvancedFilters((s) => !s)}
+                aria-expanded={showAdvancedFilters}
+                aria-label="Filtros avanzados"
+                title="Filtros avanzados"
+              >
+                ⚙
+              </button>
             </div>
+
+            {showAdvancedFilters && (
+              <div className="advanced-filters">
+                <div className="advanced-filter-row">
+                  <span className="advanced-filter-label">Fecha:</span>
+                  {[
+                    { v: null, l: 'Todas' },
+                    { v: 'today', l: 'Hoy' },
+                    { v: 'overdue', l: 'Vencidas' },
+                    { v: 'week', l: 'Esta semana' },
+                  ].map((opt) => (
+                    <button
+                      type="button"
+                      key={opt.v || 'all'}
+                      className={`filter-chip ${dateFilter === opt.v ? 'active' : ''}`}
+                      onClick={() => setDateFilter(opt.v)}
+                    >
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+                <div className="advanced-filter-row">
+                  <span className="advanced-filter-label">Asignada a:</span>
+                  <button
+                    type="button"
+                    className={`filter-chip ${assigneeFilter === null ? 'active' : ''}`}
+                    onClick={() => setAssigneeFilter(null)}
+                  >
+                    Cualquiera
+                  </button>
+                  {users.map((u) => (
+                    <button
+                      type="button"
+                      key={u.id}
+                      className={`filter-chip ${assigneeFilter === u.id ? 'active' : ''}`}
+                      onClick={() => setAssigneeFilter(u.id)}
+                    >
+                      {u.avatar_emoji} {u.name}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`filter-chip ${assigneeFilter === 'shared' ? 'active' : ''}`}
+                    onClick={() => setAssigneeFilter('shared')}
+                  >
+                    💑 Compartidas
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Quick add - input de una línea para crear tarea sin abrir modal */}
             <form className="quick-add" onSubmit={handleQuickAdd}>
