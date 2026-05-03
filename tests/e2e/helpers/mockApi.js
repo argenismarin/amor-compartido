@@ -108,10 +108,63 @@ export async function setupApiMocks(page, overrides = {}) {
         total_tasks: 0,
         completed_tasks: 0,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
       state.projects.push(newProject);
       await route.fulfill({ json: { success: true, id: newProject.id } });
     } else {
+      await route.fulfill({ json: { success: true } });
+    }
+  });
+
+  // PUT/DELETE /api/projects/[id] (con o sin ?permanent=true)
+  await page.route(/\/api\/projects\/\d+(\?.*)?$/, async (route) => {
+    const url = route.request().url();
+    const idMatch = url.match(/\/api\/projects\/(\d+)/);
+    const id = idMatch ? parseInt(idMatch[1]) : 0;
+    const isPermanent = new URL(url).searchParams.get('permanent') === 'true';
+
+    // Buscar en activos y archivados
+    let project = state.projects.find(p => p.id === id)
+                || state.archivedProjects.find(p => p.id === id);
+    if (!project) {
+      await route.fulfill({ status: 404, json: { error: 'not found' } });
+      return;
+    }
+
+    const method = route.request().method();
+    if (method === 'PUT') {
+      const body = JSON.parse(route.request().postData() || '{}');
+      if (body.is_archived === true) {
+        // archivar: mover de activos a archivados
+        state.projects = state.projects.filter(p => p.id !== id);
+        if (!state.archivedProjects.some(p => p.id === id)) {
+          state.archivedProjects.push({ ...project, is_archived: true });
+        }
+      } else if (body.is_archived === false) {
+        // restaurar: mover de archivados a activos
+        state.archivedProjects = state.archivedProjects.filter(p => p.id !== id);
+        if (!state.projects.some(p => p.id === id)) {
+          state.projects.push({ ...project, is_archived: false });
+        }
+      } else {
+        Object.assign(project, body);
+        project.updated_at = new Date().toISOString();
+      }
+      await route.fulfill({ json: { success: true } });
+    } else if (method === 'DELETE') {
+      if (isPermanent) {
+        // borrar de archived + tasks asociadas
+        state.archivedProjects = state.archivedProjects.filter(p => p.id !== id);
+        state.projects = state.projects.filter(p => p.id !== id);
+        state.tasks = state.tasks.filter(t => t.project_id !== id);
+      } else {
+        // soft archive (mismo que PUT is_archived: true)
+        state.projects = state.projects.filter(p => p.id !== id);
+        if (!state.archivedProjects.some(p => p.id === id)) {
+          state.archivedProjects.push({ ...project, is_archived: true });
+        }
+      }
       await route.fulfill({ json: { success: true } });
     }
   });
