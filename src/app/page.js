@@ -30,6 +30,7 @@ import Toast from '@/components/modals/Toast';
 import ConfirmDialog from '@/components/modals/ConfirmDialog';
 import TaskFormModal from '@/components/modals/TaskFormModal';
 import ProjectFormModal from '@/components/modals/ProjectFormModal';
+import ProjectTemplatePicker from '@/components/modals/ProjectTemplatePicker';
 import AchievementsModal from '@/components/modals/AchievementsModal';
 import HistoryModal from '@/components/modals/HistoryModal';
 import SettingsModal from '@/components/modals/SettingsModal';
@@ -126,6 +127,58 @@ export default function Home() {
 
   // PWA install prompt (captura beforeinstallprompt, ofrece banner)
   const { isInstallable, promptInstall, dismiss: dismissInstall } = useInstallPrompt();
+
+  // Project templates state
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [busyTemplateId, setBusyTemplateId] = useState(null);
+
+  const handleCreateFromTemplate = useCallback(async (template) => {
+    if (!currentUser) return;
+    setBusyTemplateId(template.id);
+    try {
+      // 1. Crear proyecto
+      const projRes = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: template.name,
+          description: template.description,
+          emoji: template.emoji,
+          color: template.color,
+        }),
+      });
+      if (!projRes.ok) throw new Error('Failed to create project');
+      const { id: projectId } = await projRes.json();
+
+      // 2. Crear tareas en serie (no paralelo: rate limit + orden visual)
+      for (const t of template.tasks) {
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: t.title,
+            description: null,
+            assigned_to: currentUser.id,
+            assigned_by: currentUser.id,
+            priority: t.priority || 'medium',
+            project_id: projectId,
+            recurrence: t.recurrence || null,
+            recurrence_days: t.recurrence_days || null,
+            is_shared: true,
+          }),
+        });
+      }
+
+      fetchProjects();
+      setShowTemplatesModal(false);
+      showToast(`Proyecto "${template.name}" creado con ${template.tasks.length} tareas 📦`);
+    } catch (err) {
+      console.error('Error creating from template:', err);
+      showToast('Error al crear desde plantilla', 'error');
+    } finally {
+      setBusyTemplateId(null);
+    }
+  }, [currentUser, showToast]);
 
   // Deep link state: si la URL trae ?task=N o ?project=N (porque vino
   // redirigida desde /task/[id] o /project/[id]), recordamos el id para
@@ -1098,6 +1151,12 @@ export default function Home() {
                   <span className="new-project-icon">+</span>
                   <span className="new-project-text">Nuevo Proyecto</span>
                 </button>
+                <button
+                  className="templates-trigger-btn"
+                  onClick={() => setShowTemplatesModal(true)}
+                >
+                  📦 Usar plantilla
+                </button>
 
                 <div className="projects-grid">
                   {projects.map(project => (
@@ -1266,6 +1325,14 @@ export default function Home() {
               recurrence: null, is_shared: false,
             });
           }}
+        />
+      )}
+
+      {showTemplatesModal && (
+        <ProjectTemplatePicker
+          onCreate={handleCreateFromTemplate}
+          onClose={() => setShowTemplatesModal(false)}
+          busyTemplateId={busyTemplateId}
         />
       )}
 
