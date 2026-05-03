@@ -23,9 +23,15 @@ export default function useUsers(showToast) {
       const list = Array.isArray(data) ? data : [];
       setUsers(list);
 
-      // Restaurar usuario desde localStorage o usar el primero por default
+      // Restaurar usuario desde localStorage o usar el primero por default.
+      // Comparamos como string (no parseInt) para tolerar que el backend
+      // pueda devolver id como string en algún edge case (driver legacy,
+      // migración, etc.) — antes el find devolvía undefined y el usuario
+      // guardado se perdía silenciosamente al primer paint.
       const savedUserId = localStorage.getItem('currentUserId');
-      const savedUser = list.find((u) => u.id === parseInt(savedUserId));
+      const savedUser = savedUserId
+        ? list.find((u) => String(u.id) === String(savedUserId))
+        : null;
       setCurrentUser(savedUser || list[0] || null);
       setLoading(false);
     } catch (error) {
