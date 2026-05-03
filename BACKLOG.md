@@ -282,20 +282,21 @@ qué hace falta para considerarlas completas.
 
 ---
 
-## M29 — Storybook for components — **Setup hecho**
+## M29 — Storybook for components — **BLOQUEADO por incompatibilidad con Next 16**
 
-**Estado**: configuración + 8 archivos de stories commiteados. Falta `npm install` y agregar más stories cuando las necesites.
+**Estado**: foundation lista pero las devDeps fueron RETIRADAS del package.json porque `@storybook/nextjs@8.x` peer-depende de Next 13/14/15, no 16. El install fallaba en Vercel con `ERESOLVE`.
 
-**Hecho**:
+**Hecho** (preservado en repo, sin runtime):
 - `.storybook/main.js` + `.storybook/preview.js` (importa globals.css real, decorator data-user, toolbar Jenifer/Argenis)
 - 8 stories: TaskCard, ProjectCard, TaskCardSkeleton, OfflineBadge, InstallPromptBanner, Toast, ConfirmDialog
-- Devdeps: `@storybook/{nextjs,react}`, `storybook ^8.4.0`
-- Scripts: `npm run storybook`, `npm run build-storybook`
 
-**Pendiente**:
-- `npm install` para que las devdeps queden en lockfile
-- Stories para los modales más complejos (ProjectFormModal, TaskFormModal, SettingsModal, StatsModal, AchievementsModal, HistoryModal, ProjectTemplatePicker)
-- Visual regression testing (`@chromatic-com/storybook` o `@storybook/test-runner` con Playwright) — desbloquea el split físico de globals.css
+**Pendiente** (esperar a que salga `@storybook/nextjs@9` con peer Next 16):
+1. `npm install -D @storybook/nextjs@^9 @storybook/react@^9 storybook@^9` (cuando exista)
+2. Re-agregar scripts `storybook` y `build-storybook` al package.json
+3. Stories para los modales más complejos (ProjectFormModal, TaskFormModal, SettingsModal, StatsModal, AchievementsModal, HistoryModal, ProjectTemplatePicker)
+4. Visual regression testing (`@chromatic-com/storybook` o `@storybook/test-runner` con Playwright) — desbloquea el split físico de globals.css
+
+Mientras tanto los archivos `.stories.jsx` viven en el repo como documentación de los estados que cada componente debería soportar.
 
 ---
 
