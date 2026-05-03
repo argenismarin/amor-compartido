@@ -458,6 +458,95 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_user_achievements ON AppChecklist_user_achievements(user_id);
     CREATE INDEX IF NOT EXISTS idx_projects_archived ON AppChecklist_projects(is_archived);
   `);
+
+  // C6: Denormalizar total_tasks/completed_tasks en projects.
+  //
+  // Antes: cada GET /api/projects hacia LEFT JOIN tasks + COUNT + GROUP BY,
+  // O(N*M) donde N=projects y M=tasks. Para 100 proyectos con 1k tareas
+  // cada uno, eso son 100k filas que el motor agrega cada request.
+  //
+  // Ahora: columnas total_tasks/completed_tasks viven en projects, mantenidas
+  // por triggers que se disparan en INSERT/UPDATE/DELETE de tasks. La query
+  // de listado pasa de O(N*M) a O(N).
+  //
+  // Wrap en try/catch porque si los triggers fallan, los endpoints viejos
+  // que usan COUNT(*) siguen funcionando (solo pierden la optimizacion).
+  try {
+    await query(`
+      DO $$
+      BEGIN
+        -- Agregar columnas si no existen
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appchecklist_projects' AND column_name = 'total_tasks') THEN
+          ALTER TABLE AppChecklist_projects ADD COLUMN total_tasks INT NOT NULL DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appchecklist_projects' AND column_name = 'completed_tasks') THEN
+          ALTER TABLE AppChecklist_projects ADD COLUMN completed_tasks INT NOT NULL DEFAULT 0;
+        END IF;
+      END $$;
+    `);
+
+    // Backfill inicial — solo si los contadores estan en 0 todavia
+    // (idempotente: si ya hay valores, este UPDATE no cambia nada).
+    await query(`
+      UPDATE AppChecklist_projects p
+      SET total_tasks = sub.total, completed_tasks = sub.done
+      FROM (
+        SELECT
+          project_id,
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE is_completed) AS done
+        FROM AppChecklist_tasks
+        WHERE project_id IS NOT NULL AND deleted_at IS NULL
+        GROUP BY project_id
+      ) sub
+      WHERE p.id = sub.project_id
+        AND (p.total_tasks <> sub.total OR p.completed_tasks <> sub.done);
+    `);
+
+    // Trigger function: recalcula contadores cuando cambia una tarea.
+    // Maneja los 4 casos: INSERT, UPDATE (incluyendo cambios de project_id,
+    // is_completed, deleted_at), DELETE.
+    await query(`
+      CREATE OR REPLACE FUNCTION appchecklist_update_project_counters()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        -- Para UPDATE/DELETE: ajustar el proyecto VIEJO (si tenia uno)
+        IF (TG_OP = 'UPDATE' OR TG_OP = 'DELETE') THEN
+          IF OLD.project_id IS NOT NULL AND OLD.deleted_at IS NULL THEN
+            UPDATE AppChecklist_projects
+            SET total_tasks = GREATEST(total_tasks - 1, 0),
+                completed_tasks = GREATEST(completed_tasks - (CASE WHEN OLD.is_completed THEN 1 ELSE 0 END), 0)
+            WHERE id = OLD.project_id;
+          END IF;
+        END IF;
+
+        -- Para INSERT/UPDATE: ajustar el proyecto NUEVO (si tiene uno y no esta soft-deleted)
+        IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
+          IF NEW.project_id IS NOT NULL AND NEW.deleted_at IS NULL THEN
+            UPDATE AppChecklist_projects
+            SET total_tasks = total_tasks + 1,
+                completed_tasks = completed_tasks + (CASE WHEN NEW.is_completed THEN 1 ELSE 0 END)
+            WHERE id = NEW.project_id;
+          END IF;
+        END IF;
+
+        RETURN COALESCE(NEW, OLD);
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    // Drop+recreate triggers para que sean idempotentes en hot reload
+    await query(`
+      DROP TRIGGER IF EXISTS trg_tasks_project_counters_iud ON AppChecklist_tasks;
+      CREATE TRIGGER trg_tasks_project_counters_iud
+        AFTER INSERT OR UPDATE OR DELETE ON AppChecklist_tasks
+        FOR EACH ROW EXECUTE FUNCTION appchecklist_update_project_counters();
+    `);
+  } catch (err) {
+    console.error('[db] C6 project counters migration failed (non-fatal):', err.message);
+  }
 }
 
 export default pool;

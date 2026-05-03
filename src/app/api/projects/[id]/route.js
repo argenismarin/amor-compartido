@@ -11,14 +11,9 @@ export async function GET(request, { params }) {
     await ensureDatabase();
     const { id } = await params;
 
+    // Contadores desnormalizados (trigger los mantiene).
     const project = await queryOne(
-      `SELECT p.*,
-        COUNT(t.id) as total_tasks,
-        COUNT(CASE WHEN t.is_completed THEN 1 END) as completed_tasks
-       FROM AppChecklist_projects p
-       LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
-       WHERE p.id = $1
-       GROUP BY p.id`,
+      `SELECT * FROM AppChecklist_projects WHERE id = $1`,
       [id]
     );
 
@@ -117,13 +112,7 @@ export async function PUT(request, { params }) {
     // refrescar y mostrar un toast explicativo (mismo patrón que tasks).
     if (expected_updated_at && updated.length === 0) {
       const current = await queryOne(
-        `SELECT p.*,
-          COUNT(t.id) as total_tasks,
-          COUNT(CASE WHEN t.is_completed THEN 1 END) as completed_tasks
-         FROM AppChecklist_projects p
-         LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
-         WHERE p.id = $1
-         GROUP BY p.id`,
+        `SELECT * FROM AppChecklist_projects WHERE id = $1`,
         [id]
       );
       return NextResponse.json(

@@ -12,21 +12,16 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const includeArchived = searchParams.get('includeArchived') === 'true';
 
-    let sql = `
-      SELECT p.*,
-        COUNT(t.id) as total_tasks,
-        COUNT(CASE WHEN t.is_completed THEN 1 END) as completed_tasks
-      FROM AppChecklist_projects p
-      LEFT JOIN AppChecklist_tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
-    `;
-
-    // Filter out archived projects
+    // total_tasks/completed_tasks vienen desnormalizadas en la tabla
+    // (mantenidas por trigger trg_tasks_project_counters_iud, ver db.js).
+    // Antes esto era LEFT JOIN + COUNT + GROUP BY que escalaba mal con
+    // muchas tareas por proyecto.
+    let sql = `SELECT * FROM AppChecklist_projects`;
     if (!includeArchived) {
       // IS NOT TRUE incluye tanto FALSE como NULL (filas legacy)
-      sql += ' WHERE p.is_archived IS NOT TRUE';
+      sql += ' WHERE is_archived IS NOT TRUE';
     }
-
-    sql += ' GROUP BY p.id ORDER BY p.created_at DESC';
+    sql += ' ORDER BY created_at DESC';
 
     const projects = await query(sql);
     return NextResponse.json(projects);
