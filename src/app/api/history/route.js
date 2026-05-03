@@ -7,8 +7,13 @@ export async function GET(request) {
     await ensureDatabase();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    // Clampeo: limit ∈ [1, 100], offset ≥ 0. Sin esto un cliente podría
+    // pedir limit=999999 (carga DB innecesaria) o limit=-100 (devuelve 0
+    // rows en silencio sin que el caller sepa por qué).
+    const rawLimit = parseInt(searchParams.get('limit') || '50', 10);
+    const rawOffset = parseInt(searchParams.get('offset') || '0', 10);
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 50, 1), 100);
+    const offset = Math.max(Number.isFinite(rawOffset) ? rawOffset : 0, 0);
 
     let sql = `
       SELECT t.*,
