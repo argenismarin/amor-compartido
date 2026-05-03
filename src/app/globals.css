@@ -4078,6 +4078,71 @@ html[data-theme="dark"] .project-card-progress-bar {
   background: var(--border);
 }
 
+/* Error boundary + 404 (M28) */
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.error-boundary-content {
+  max-width: 420px;
+  text-align: center;
+  background: white;
+  padding: 32px;
+  border-radius: 20px;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.08);
+}
+
+.error-boundary-emoji {
+  font-size: 4rem;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.error-boundary-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.error-boundary-message {
+  font-size: 0.95rem;
+  color: var(--text-light);
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
+.error-boundary-details {
+  text-align: left;
+  background: var(--surface);
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.8rem;
+}
+
+.error-boundary-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.error-boundary-details code {
+  display: block;
+  margin-top: 6px;
+  font-family: monospace;
+  word-break: break-all;
+  color: var(--text);
+}
+
+html[data-theme="dark"] .error-boundary-content {
+  background: var(--surface);
+}
+
 /* Stats modal (M15) */
 .stats-modal {
   max-width: 560px;
