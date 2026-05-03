@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, ensureDatabase } from '@/lib/db';
 import { updateUserSchema, validateBody } from '@/lib/validation/schemas';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 export async function GET() {
   try {
@@ -18,6 +19,8 @@ export async function GET() {
 }
 
 export async function PUT(request) {
+  const limited = enforceRateLimit(request, 'PUT /api/users', 20, 60_000);
+  if (limited) return limited;
   try {
     const body = await request.json();
     const { data, error } = validateBody(updateUserSchema, body);

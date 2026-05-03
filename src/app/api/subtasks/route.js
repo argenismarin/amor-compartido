@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { queryOne, ensureDatabase } from '@/lib/db';
 import { createSubtaskSchema, validateBody } from '@/lib/validation/schemas';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // POST /api/subtasks — crear subtarea
 // body: { task_id, title }
 export async function POST(request) {
+  const limited = enforceRateLimit(request, 'POST /api/subtasks', 60, 60_000);
+  if (limited) return limited;
   try {
     await ensureDatabase();
     const body = await request.json();

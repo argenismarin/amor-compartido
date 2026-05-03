@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, withTransaction, ensureDatabase } from '@/lib/db';
 import { updateProjectSchema, validateBody } from '@/lib/validation/schemas';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // La tabla AppChecklist_projects se crea en initDatabase() / ensureDatabase().
 // No hace falta una función extra acá.
@@ -33,6 +34,8 @@ export async function GET(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
+  const limited = enforceRateLimit(request, 'PUT /api/projects/[id]', 60, 60_000);
+  if (limited) return limited;
   try {
     await ensureDatabase();
     const { id } = await params;
@@ -137,6 +140,8 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+  const limited = enforceRateLimit(request, 'DELETE /api/projects/[id]', 30, 60_000);
+  if (limited) return limited;
   try {
     await ensureDatabase();
     const { id } = await params;

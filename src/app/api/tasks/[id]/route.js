@@ -8,6 +8,7 @@ import {
   updateTaskSchema,
   validateBody,
 } from '@/lib/validation/schemas';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // Helper: Calcula la siguiente fecha límite para una tarea recurrente.
 // Si la tarea tenía due_date, suma desde ahí; si no, desde hoy.
@@ -42,6 +43,10 @@ function calculateNextDueDate(currentDueDateStr, recurrence) {
 }
 
 export async function PUT(request, { params }) {
+  // Rate limit: 120/min cubre toggles rapidos, reactions, edits sin
+  // molestar al usuario humano pero corta scripts abusivos.
+  const limited = enforceRateLimit(request, 'PUT /api/tasks/[id]', 120, 60_000);
+  if (limited) return limited;
   try {
     const { id } = await params;
     const body = await request.json();
@@ -258,6 +263,8 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+  const limited = enforceRateLimit(request, 'DELETE /api/tasks/[id]', 60, 60_000);
+  if (limited) return limited;
   try {
     const { id } = await params;
     // Soft delete: marcar deleted_at en lugar de borrar realmente.

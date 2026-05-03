@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, ensureDatabase } from '@/lib/db';
 import { getBogotaDate } from '@/lib/timezone';
 import { specialDateSchema, validateBody } from '@/lib/validation/schemas';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // Helper: Parsea una fecha de forma segura (evita problemas de zona horaria)
 const parseDateSafe = (dateStr) => {
@@ -72,6 +73,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const limited = enforceRateLimit(request, 'POST /api/special-dates', 20, 60_000);
+  if (limited) return limited;
   try {
     await ensureDatabase();
     const body = await request.json();

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, ensureDatabase } from '@/lib/db';
 import { createProjectSchema, validateBody } from '@/lib/validation/schemas';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // La tabla AppChecklist_projects y la columna project_id en tasks se crean
 // en initDatabase() / ensureDatabase(). No hace falta una función extra acá.
@@ -36,6 +37,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const limited = enforceRateLimit(request, 'POST /api/projects', 20, 60_000);
+  if (limited) return limited;
   try {
     await ensureDatabase();
     const body = await request.json();
