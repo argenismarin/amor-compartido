@@ -13,7 +13,11 @@ import { logActivity } from '@/lib/activity';
 
 // Helper: Calcula la siguiente fecha límite para una tarea recurrente.
 // Si la tarea tenía due_date, suma desde ahí; si no, desde hoy.
-function calculateNextDueDate(currentDueDateStr, recurrence) {
+//
+// Para recurrence === 'custom', recurrence_days es un JSON array de
+// ints 0-6 (0=domingo, 1=lunes, ..., 6=sabado). Devuelve la siguiente
+// fecha que caiga en uno de esos dias.
+function calculateNextDueDate(currentDueDateStr, recurrence, recurrenceDaysStr) {
   let baseDate;
   if (currentDueDateStr) {
     // Parsear YYYY-MM-DD evitando shifts de zona horaria
@@ -34,6 +38,27 @@ function calculateNextDueDate(currentDueDateStr, recurrence) {
     case 'monthly':
       baseDate.setMonth(baseDate.getMonth() + 1);
       break;
+    case 'custom': {
+      // Parsear los dias permitidos. Si el JSON es invalido, no recurrir.
+      let allowedDays;
+      try {
+        allowedDays = JSON.parse(recurrenceDaysStr || '[]');
+      } catch {
+        return null;
+      }
+      if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
+      // Avanzar dia por dia hasta encontrar uno que matchee. Cap a 14
+      // para no loopear si los datos son inconsistentes.
+      for (let i = 1; i <= 14; i++) {
+        baseDate.setDate(baseDate.getDate() + 1);
+        if (allowedDays.includes(baseDate.getDay())) {
+          return baseDate.getFullYear() + '-' +
+            String(baseDate.getMonth() + 1).padStart(2, '0') + '-' +
+            String(baseDate.getDate()).padStart(2, '0');
+        }
+      }
+      return null;
+    }
     default:
       return null;
   }
@@ -87,7 +112,7 @@ export async function PUT(request, { params }) {
         );
 
         if (newCompletedStatus && task.recurrence) {
-          const nextDueDate = calculateNextDueDate(task.due_date, task.recurrence);
+          const nextDueDate = calculateNextDueDate(task.due_date, task.recurrence, task.recurrence_days);
           if (nextDueDate) {
             await tx.query(
               `INSERT INTO AppChecklist_tasks

@@ -4054,6 +4054,57 @@ html[data-theme="dark"] .project-card-progress-bar {
   background: var(--border);
 }
 
+/* Weekdays selector (recurrence custom) */
+.weekdays-selector {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  justify-content: space-between;
+}
+
+.weekday-option {
+  flex: 1;
+  height: 38px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: white;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  max-width: 38px;
+}
+
+.weekday-option:hover {
+  border-color: var(--primary);
+}
+
+.weekday-option.selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+[data-user="argenis"] .weekday-option:hover {
+  border-color: var(--burgundy);
+}
+
+[data-user="argenis"] .weekday-option.selected {
+  background: var(--burgundy);
+  border-color: var(--burgundy);
+}
+
+html[data-theme="dark"] .weekday-option {
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* Install prompt banner */
 .install-prompt-banner {
   position: fixed;

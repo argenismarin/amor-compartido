@@ -187,18 +187,70 @@ export default function TaskFormModal({
                 { value: null, label: 'No repetir' },
                 { value: 'daily', label: '📅 Diaria' },
                 { value: 'weekly', label: '📆 Semanal' },
-                { value: 'monthly', label: '🗓️ Mensual' }
+                { value: 'monthly', label: '🗓️ Mensual' },
+                { value: 'custom', label: '⚙️ Personalizada' },
               ].map(opt => (
                 <button
                   type="button"
                   key={opt.value || 'none'}
                   className={`recurrence-option ${formData.recurrence === opt.value ? 'selected' : ''}`}
-                  onClick={() => setFormData({...formData, recurrence: opt.value})}
+                  onClick={() => setFormData({
+                    ...formData,
+                    recurrence: opt.value,
+                    // Limpiar recurrence_days si se cambia a algo que no es custom
+                    recurrence_days: opt.value === 'custom' ? formData.recurrence_days : null,
+                  })}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
+
+            {/* Selector de dias de la semana, solo cuando recurrence === 'custom'.
+                recurrence_days se almacena como JSON array de ints 0-6 (0=domingo). */}
+            {formData.recurrence === 'custom' && (
+              <div className="weekdays-selector" role="group" aria-label="Días de la semana">
+                {[
+                  { idx: 1, label: 'L' },
+                  { idx: 2, label: 'M' },
+                  { idx: 3, label: 'X' },
+                  { idx: 4, label: 'J' },
+                  { idx: 5, label: 'V' },
+                  { idx: 6, label: 'S' },
+                  { idx: 0, label: 'D' },
+                ].map((day) => {
+                  let selected = [];
+                  try {
+                    selected = formData.recurrence_days
+                      ? JSON.parse(formData.recurrence_days)
+                      : [];
+                  } catch {
+                    selected = [];
+                  }
+                  const isSelected = selected.includes(day.idx);
+                  return (
+                    <button
+                      type="button"
+                      key={day.idx}
+                      className={`weekday-option ${isSelected ? 'selected' : ''}`}
+                      onClick={() => {
+                        const next = isSelected
+                          ? selected.filter((d) => d !== day.idx)
+                          : [...selected, day.idx].sort((a, b) => a - b);
+                        setFormData({
+                          ...formData,
+                          recurrence_days: next.length > 0 ? JSON.stringify(next) : null,
+                        });
+                      }}
+                      aria-pressed={isSelected}
+                      aria-label={`Repetir los ${day.label === 'L' ? 'lunes' : day.label === 'M' ? 'martes' : day.label === 'X' ? 'miércoles' : day.label === 'J' ? 'jueves' : day.label === 'V' ? 'viernes' : day.label === 'S' ? 'sábados' : 'domingos'}`}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <button type="submit" className="submit-btn" disabled={isSaving}>
