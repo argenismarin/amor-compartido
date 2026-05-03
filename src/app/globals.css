@@ -4054,6 +4054,122 @@ html[data-theme="dark"] .project-card-progress-bar {
   background: var(--border);
 }
 
+/* Install prompt banner */
+.install-prompt-banner {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  background: white;
+  border: 2px solid var(--primary);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  z-index: 110;
+  animation: installPromptSlideUp 0.4s ease;
+}
+
+@keyframes installPromptSlideUp {
+  from { transform: translateY(120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+[data-user="argenis"] .install-prompt-banner {
+  border-color: var(--burgundy);
+}
+
+.install-prompt-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.install-prompt-emoji {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.install-prompt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.install-prompt-text strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.install-prompt-text span {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.install-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.install-prompt-btn {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: all 0.2s ease;
+}
+
+.install-prompt-btn-primary {
+  padding: 9px 18px;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.install-prompt-btn-primary:hover {
+  background: var(--primary-dark);
+}
+
+[data-user="argenis"] .install-prompt-btn-primary {
+  background: var(--burgundy);
+}
+
+[data-user="argenis"] .install-prompt-btn-primary:hover {
+  background: var(--burgundy-dark);
+}
+
+.install-prompt-btn-secondary {
+  width: 32px;
+  height: 32px;
+  background: var(--surface);
+  color: var(--text-light);
+  font-size: 1.2rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.install-prompt-btn-secondary:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .install-prompt-banner {
+  background: var(--surface);
+}
+
 /* Theme picker UI */
 .theme-picker {
   display: flex;

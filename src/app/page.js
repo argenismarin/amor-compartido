@@ -19,11 +19,13 @@ import useSpecialDates from '@/hooks/useSpecialDates';
 import usePolling from '@/hooks/usePolling';
 import useTasks from '@/hooks/useTasks';
 import useTheme from '@/hooks/useTheme';
+import useInstallPrompt from '@/hooks/useInstallPrompt';
 import TaskCard from '@/components/TaskCard';
 import TaskCardSkeleton from '@/components/TaskCardSkeleton';
 import ProjectCard from '@/components/ProjectCard';
 import CelebrationOverlay from '@/components/CelebrationOverlay';
 import OfflineBadge from '@/components/OfflineBadge';
+import InstallPromptBanner from '@/components/InstallPromptBanner';
 import Toast from '@/components/modals/Toast';
 import ConfirmDialog from '@/components/modals/ConfirmDialog';
 import TaskFormModal from '@/components/modals/TaskFormModal';
@@ -121,6 +123,9 @@ export default function Home() {
 
   // Theme picker (light/dark/auto, persiste en localStorage)
   const { theme, setTheme } = useTheme();
+
+  // PWA install prompt (captura beforeinstallprompt, ofrece banner)
+  const { isInstallable, promptInstall, dismiss: dismissInstall } = useInstallPrompt();
 
   // Deep link state: si la URL trae ?task=N o ?project=N (porque vino
   // redirigida desde /task/[id] o /project/[id]), recordamos el id para
@@ -1280,6 +1285,12 @@ export default function Home() {
       )}
 
       <OfflineBadge />
+
+      <InstallPromptBanner
+        isInstallable={isInstallable}
+        onInstall={promptInstall}
+        onDismiss={dismissInstall}
+      />
 
       <Toast
         toast={toast}
