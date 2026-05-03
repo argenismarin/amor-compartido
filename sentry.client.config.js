@@ -15,6 +15,18 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     // Para una app de 2 usuarios esto está sobradísimo.
     tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.1,
 
+    // Web Vitals + browser perf (LCP, FID, CLS, TTFB, INP).
+    // Estas métricas ya se trackean automáticamente por @sentry/nextjs
+    // browser SDK cuando tracesSampleRate > 0; las exponemos en el
+    // dashboard de Performance > Web Vitals.
+    integrations: [
+      Sentry.browserTracingIntegration(),
+    ],
+
+    // Captura clicks/navigation/fetch automáticamente como breadcrumbs
+    // para tener contexto cuando un error ocurre. Default ya hace esto;
+    // mantenemos defaults.
+
     // Sin replays de sesión por ahora (privacidad + cuota gratis).
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
@@ -27,6 +39,10 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
       // ResizeObserver loop limit (warning de Chrome, no es bug real)
       'ResizeObserver loop limit exceeded',
       'ResizeObserver loop completed with undelivered notifications',
+      // Cancelaciones de fetch (tab cerrada mid-request)
+      'AbortError',
+      // Errores de extensiones de Chrome inyectados en window
+      'chrome-extension://',
     ],
   });
 }
