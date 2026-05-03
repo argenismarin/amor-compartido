@@ -356,6 +356,110 @@ export async function initDatabase() {
     await query('INSERT INTO AppChecklist_app_usage (first_use) VALUES (CURRENT_DATE)');
   }
 
+  // M20: Multi-couple foundation — spaces + memberships + email/password.
+  //
+  // Diseño: cada par (o grupo, en el futuro) vive en un "space".
+  // Tasks/projects/etc tienen space_id para scoping cuando hay
+  // multiples spaces. Para retro-compatibilidad: si las tablas existen
+  // sin space_id, todas las filas se asignan al "Default Space" creado
+  // automaticamente con los users 1+2.
+  //
+  // Auth: campos email/password_hash en users. Nullables porque la app
+  // en modo legacy (Jenifer+Argenis) no requiere login. Si en el futuro
+  // se habilita auth, los users existentes pueden setear su email/pw
+  // desde un onboarding; mientras tanto operan en modo "no-auth".
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS AppChecklist_spaces (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        created_by INT NULL REFERENCES AppChecklist_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await query(`
+      CREATE TABLE IF NOT EXISTS AppChecklist_space_members (
+        space_id INT REFERENCES AppChecklist_spaces(id) ON DELETE CASCADE,
+        user_id INT REFERENCES AppChecklist_users(id) ON DELETE CASCADE,
+        role VARCHAR(20) DEFAULT 'member',
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (space_id, user_id)
+      )
+    `);
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appchecklist_users' AND column_name = 'email') THEN
+          ALTER TABLE AppChecklist_users ADD COLUMN email VARCHAR(255) NULL UNIQUE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appchecklist_users' AND column_name = 'password_hash') THEN
+          ALTER TABLE AppChecklist_users ADD COLUMN password_hash TEXT NULL;
+        END IF;
+      END $$;
+    `);
+
+    // Seed: si no hay spaces, crear el "Default Space" con los users
+    // existentes como miembros.
+    const existingSpaces = await query('SELECT id FROM AppChecklist_spaces');
+    if (existingSpaces.length === 0) {
+      const allUsers = await query('SELECT id FROM AppChecklist_users ORDER BY id');
+      if (allUsers.length > 0) {
+        const spaceResult = await query(
+          `INSERT INTO AppChecklist_spaces (name, created_by) VALUES ($1, $2) RETURNING id`,
+          ['Jenifer & Argenis', allUsers[0].id]
+        );
+        const spaceId = spaceResult[0]?.id;
+        if (spaceId) {
+          for (const u of allUsers) {
+            await query(
+              `INSERT INTO AppChecklist_space_members (space_id, user_id, role)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (space_id, user_id) DO NOTHING`,
+              [spaceId, u.id, u.id === allUsers[0].id ? 'admin' : 'member']
+            );
+          }
+        }
+      }
+    }
+
+    // Agregar space_id a tablas scopeables. Idempotente.
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appchecklist_tasks' AND column_name = 'space_id') THEN
+          ALTER TABLE AppChecklist_tasks ADD COLUMN space_id INT NULL;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appchecklist_projects' AND column_name = 'space_id') THEN
+          ALTER TABLE AppChecklist_projects ADD COLUMN space_id INT NULL;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'appchecklist_special_dates' AND column_name = 'space_id') THEN
+          ALTER TABLE AppChecklist_special_dates ADD COLUMN space_id INT NULL;
+        END IF;
+      END $$;
+    `);
+
+    // Backfill: filas sin space_id van al primer space (default).
+    const firstSpace = await queryOne('SELECT id FROM AppChecklist_spaces ORDER BY id LIMIT 1');
+    if (firstSpace) {
+      await query(`UPDATE AppChecklist_tasks SET space_id = $1 WHERE space_id IS NULL`, [firstSpace.id]);
+      await query(`UPDATE AppChecklist_projects SET space_id = $1 WHERE space_id IS NULL`, [firstSpace.id]);
+      await query(`UPDATE AppChecklist_special_dates SET space_id = $1 WHERE space_id IS NULL`, [firstSpace.id]);
+    }
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_tasks_space ON AppChecklist_tasks(space_id);
+      CREATE INDEX IF NOT EXISTS idx_projects_space ON AppChecklist_projects(space_id);
+      CREATE INDEX IF NOT EXISTS idx_space_members_user ON AppChecklist_space_members(user_id);
+    `);
+  } catch (err) {
+    console.error('[db] M20 spaces migration failed (non-fatal):', err.message);
+  }
+
   // C7: Migrar TIMESTAMP → TIMESTAMPTZ.
   //
   // Razon: el codigo legacy guardaba `getBogotaDate()` (un Date JS objeto
