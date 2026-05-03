@@ -30,6 +30,7 @@ export default function TaskCard({
   onSubtaskDelete,
 }) {
   const [showReactions, setShowReactions] = useState(false);
+  const [sendingReaction, setSendingReaction] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
@@ -192,9 +193,19 @@ export default function TaskCard({
                     <button
                       key={emoji}
                       className="reaction-btn"
-                      onClick={() => {
-                        onReaction(task.id, emoji);
-                        setShowReactions(false);
+                      disabled={sendingReaction}
+                      onClick={async () => {
+                        // Disable + await previene doble-tap rápido en dos
+                        // emojis distintos: antes ambos se mandaban y el
+                        // último ganaba arbitrariamente.
+                        if (sendingReaction) return;
+                        setSendingReaction(true);
+                        try {
+                          await onReaction(task.id, emoji);
+                        } finally {
+                          setSendingReaction(false);
+                          setShowReactions(false);
+                        }
                       }}
                     >
                       {emoji}
@@ -202,6 +213,7 @@ export default function TaskCard({
                   ))}
                   <button
                     className="reaction-btn reaction-close"
+                    disabled={sendingReaction}
                     onClick={() => setShowReactions(false)}
                   >
                     ✕
