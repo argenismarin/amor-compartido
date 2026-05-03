@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne, ensureDatabase } from '@/lib/db';
+import { queryOne, ensureDatabase } from '@/lib/db';
 import { createSubtaskSchema, validateBody } from '@/lib/validation/schemas';
 
 // POST /api/subtasks — crear subtarea
@@ -14,17 +14,17 @@ export async function POST(request) {
     }
     const { task_id, title } = data;
 
-    // Calcular el siguiente sort_order
-    const maxOrder = await queryOne(
-      'SELECT COALESCE(MAX(sort_order), 0) as max_order FROM AppChecklist_subtasks WHERE task_id = $1',
-      [task_id]
-    );
-    const nextOrder = (maxOrder?.max_order || 0) + 1;
-
+    // sort_order calculado en el mismo INSERT (subquery atómico) para
+    // evitar race condition: dos POSTs concurrentes al mismo task_id
+    // antes obtenían el mismo MAX y colisionaban en sort_order.
     const result = await queryOne(
       `INSERT INTO AppChecklist_subtasks (task_id, title, sort_order)
-       VALUES ($1, $2, $3) RETURNING id, task_id, title, is_completed, sort_order`,
-      [task_id, title, nextOrder]
+       VALUES (
+         $1, $2,
+         (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM AppChecklist_subtasks WHERE task_id = $1)
+       )
+       RETURNING id, task_id, title, is_completed, sort_order`,
+      [task_id, title]
     );
 
     return NextResponse.json({ success: true, subtask: result });
