@@ -9,22 +9,22 @@ export default function ProjectCard({ project, onSelect, onEdit, onDelete }) {
   return (
     <div
       className="project-card"
-      onClick={onSelect}
+      onClick={() => onSelect?.()}
       style={{ '--project-color': project.color }}
     >
       <div className="project-card-header">
-        <span className="project-card-emoji">{project.emoji}</span>
+        <span className="project-card-emoji">{project.emoji || '📁'}</span>
         <div className="project-card-actions" onClick={e => e.stopPropagation()}>
           <button
             className="project-action-btn"
-            onClick={onEdit}
+            onClick={() => onEdit?.()}
             aria-label="Editar proyecto"
           >
             ✏️
           </button>
           <button
             className="project-action-btn delete"
-            onClick={onDelete}
+            onClick={() => onDelete?.()}
             aria-label="Archivar proyecto"
           >
             🗑️
