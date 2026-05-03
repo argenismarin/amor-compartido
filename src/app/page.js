@@ -35,6 +35,7 @@ import ProjectTemplatePicker from '@/components/modals/ProjectTemplatePicker';
 import AchievementsModal from '@/components/modals/AchievementsModal';
 import HistoryModal from '@/components/modals/HistoryModal';
 import SettingsModal from '@/components/modals/SettingsModal';
+import StatsModal from '@/components/modals/StatsModal';
 
 export default function Home() {
   // Toast state (declarado primero porque otros hooks lo reciben como dep)
@@ -117,6 +118,9 @@ export default function Home() {
   // History state
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [history, setHistory] = useState({ tasks: [], stats: { thisWeek: 0, total: 0 } });
+
+  // Stats dashboard
+  const [showStatsModal, setShowStatsModal] = useState(false);
 
   // Settings/Special dates state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -857,6 +861,14 @@ export default function Home() {
             </button>
             <button
               className="header-icon-btn"
+              onClick={() => setShowStatsModal(true)}
+              aria-label="Ver estadísticas"
+              title="Estadísticas"
+            >
+              📊
+            </button>
+            <button
+              className="header-icon-btn"
               onClick={() => setShowSettingsModal(true)}
               aria-label="Configuracion"
               title="Configuracion"
@@ -1488,6 +1500,10 @@ export default function Home() {
           history={history}
           onClose={() => setShowHistoryModal(false)}
         />
+      )}
+
+      {showStatsModal && (
+        <StatsModal onClose={() => setShowStatsModal(false)} />
       )}
 
       {showSettingsModal && (
