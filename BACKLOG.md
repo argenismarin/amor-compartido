@@ -1,12 +1,25 @@
 # Backlog técnico
 
-Mejoras pendientes que son demasiado grandes para una sesión casual. Cada una tiene una spec implementable y referencias a los archivos relevantes. Atacar de a una por sesión dedicada.
+Estado actualizado tras la sesión 2026-05-03: las 6 mejoras grandes
+recibieron foundation + parte de la implementación. Lo que falta de
+cada una está documentado abajo como "Pendiente" para que sea claro
+qué hace falta para considerarlas completas.
 
 ---
 
-## M6 — Offline-first (queue mutations, sync on reconnect)
+## M6 — Offline-first (queue mutations, sync on reconnect) — **Foundation hecho**
 
-**Estimación**: 4–6 horas
+**Estado**: foundation implementado en commit `214857f`. Falta integración fina en cada handler de mutation.
+
+**Hecho**:
+- `src/lib/offlineQueue.js`: IndexedDB queue + drain + memory fallback
+- `src/hooks/useOnlineStatus.js`: refactor a `{ isOnline, pendingCount, drainNow }` con sync auto al evento `online`
+- `src/components/OfflineBadge.jsx`: 3 estados visuales (hidden/syncing/offline)
+- `src/lib/api.js`: opción `queueIfOffline: true` en fetchJson
+- `public/sw.js`: cache-first del shell para que la app abra sin red
+
+**Pendiente**:
+- Migrar cada handler en `useTasks.js` de `fetch()` directo a `fetchJson(..., { queueIfOffline: true })` para que las mutations sobrevivan offline. Estimación: 1–2 horas.
 
 **Problema actual**: hoy hay un `OfflineBadge` cosmético (`src/components/OfflineBadge.jsx`) pero la app no funciona offline. Si pierdes conexión a mitad de uso, los toggles, creates y edits se pierden.
 
@@ -51,9 +64,24 @@ Mejoras pendientes que son demasiado grandes para una sesión casual. Cada una t
 
 ---
 
-## M20 — Multi-couple support (auth + spaces)
+## M20 — Multi-couple support (auth + spaces) — **Foundation hecho**
 
-**Estimación**: 8–12 horas
+**Estado**: schema + helpers + endpoint inicial commiteados. Falta el frontend de auth y el scoping efectivo de queries.
+
+**Hecho**:
+- Tablas `AppChecklist_spaces`, `AppChecklist_space_members`
+- Columnas `email`, `password_hash` en users (nullables)
+- Columnas `space_id` en tasks/projects/special_dates con backfill al "Default Space" creado automáticamente para Jenifer+Argenis
+- Indices en `space_id` y `space_members.user_id`
+- `src/lib/auth.js`: `getActiveSpaceForUser`, `getSpacesForUser`, `isMemberOf`, `resolveSpace`, `createSpace`, `addMember`
+- `GET/POST /api/spaces`
+
+**Pendiente** (orden recomendado):
+1. Decidir auth provider (Auth.js v5 con magic-link via Resend / Clerk)
+2. Páginas `/login`, `/signup` y session middleware
+3. Migrar cada API route a `resolveSpace(request, userId)` y `WHERE space_id = $1`
+4. Frontend: switcher de space en header si hay múltiples
+5. Email para invitar nuevo miembro a un space
 
 **Problema**: hoy la app es hardcoded para Jenifer + Argenis. ID 1 y 2 son fijos. No hay auth.
 
@@ -118,9 +146,26 @@ Mejoras pendientes que son demasiado grandes para una sesión casual. Cada una t
 
 ---
 
-## M27 — TypeScript incremental migration
+## M27 — TypeScript incremental migration — **En progreso**
 
-**Estimación**: 6–8 horas (parcial), 20+ horas (completa)
+**Estado**: setup + 5 archivos `lib/` migrados.
+
+**Hecho**:
+- `tsconfig.json` con `allowJs: true` + `strict: true` para `.ts/.tsx`
+- `src/types/db.ts`: interfaces para todas las tablas + tipos enriquecidos con JOIN
+- `src/types/api.ts`: shapes derivados de zod schemas via `z.infer<>`
+- Migrados a `.ts`: `fuzzy`, `rateLimit`, `activity`, `timezone`, `dates`
+- Devdeps en package.json: `typescript`, `@types/{node,pg,react,react-dom}`
+
+**Pendiente**:
+- `lib/`: `api.js`, `db.js`, `push.js`, `auth.js`, `offlineQueue.js`, `projectTemplates.js`, `validation/schemas.js`
+- `hooks/`: 11 archivos
+- `components/`: 7 componentes top-level
+- `components/modals/`: 7 modales
+- `app/api/**/*.js`: 17 routes
+- `app/page.js`: el más complejo, dejar al final
+
+**Estimación restante**: 4–6 horas para 60% de cobertura, 12+ horas para 100%.
 
 **Estrategia incremental** (evita rewrite big bang):
 
@@ -159,9 +204,21 @@ Mejoras pendientes que son demasiado grandes para una sesión casual. Cada una t
 
 ---
 
-## M28 — Convert SPA to Next App Router routes
+## M28 — Convert SPA to Next App Router routes — **Foundation hecho**
 
-**Estimación**: 6–8 horas
+**Estado**: foundation (Context + loading + error + 404) commiteado. Falta el split real de page.js.
+
+**Hecho**:
+- `src/contexts/AppContext.jsx`: Provider + `useApp()` hook listo para que las nuevas rutas consuman state global
+- `src/app/loading.js`: spinner mientras hidrata
+- `src/app/error.js`: error boundary global con captura a Sentry + botón Reintentar
+- `src/app/not-found.js`: 404 con branding
+
+**Pendiente**:
+- Crear las rutas separadas (`/projects`, `/history`, `/settings`, `/stats`, `/achievements`)
+- Mover JSX de cada bloque de page.js a su nueva route
+- Adelgazar page.js a ~200 LOC
+- Modal-páginas con parallel/intercepting routes (URLs propias pero abren como modal)
 
 **Problema**: `page.js` tiene 1400+ LOC con todo el state. Difícil de navegar, lento de build, no hay code splitting por feature.
 
@@ -225,7 +282,24 @@ Mejoras pendientes que son demasiado grandes para una sesión casual. Cada una t
 
 ---
 
-## M29 — Storybook for components
+## M29 — Storybook for components — **Setup hecho**
+
+**Estado**: configuración + 8 archivos de stories commiteados. Falta `npm install` y agregar más stories cuando las necesites.
+
+**Hecho**:
+- `.storybook/main.js` + `.storybook/preview.js` (importa globals.css real, decorator data-user, toolbar Jenifer/Argenis)
+- 8 stories: TaskCard, ProjectCard, TaskCardSkeleton, OfflineBadge, InstallPromptBanner, Toast, ConfirmDialog
+- Devdeps: `@storybook/{nextjs,react}`, `storybook ^8.4.0`
+- Scripts: `npm run storybook`, `npm run build-storybook`
+
+**Pendiente**:
+- `npm install` para que las devdeps queden en lockfile
+- Stories para los modales más complejos (ProjectFormModal, TaskFormModal, SettingsModal, StatsModal, AchievementsModal, HistoryModal, ProjectTemplatePicker)
+- Visual regression testing (`@chromatic-com/storybook` o `@storybook/test-runner` con Playwright) — desbloquea el split físico de globals.css
+
+---
+
+## M29 — original spec (archivada)
 
 **Estimación**: 3 horas
 
@@ -251,7 +325,26 @@ Mejoras pendientes que son demasiado grandes para una sesión casual. Cada una t
 
 ---
 
-## M30 — i18n (es/en) with next-intl
+## M30 — i18n (es/en) — **Foundation hecho con sistema custom**
+
+**Estado**: sistema lite implementado (sin next-intl). Falta reemplazar strings hardcoded.
+
+**Hecho**:
+- `src/i18n/messages/{es,en}.json`: ~100 keys agrupadas por feature
+- `src/hooks/useI18n.js`: `t(key, vars?)` con notación punto + interpolación, persistencia, detect navigator.language
+- Picker en SettingsModal junto al theme picker (🇨🇴 Español / 🇬🇧 English)
+- `<html lang="...">` se actualiza al cambiar idioma
+
+**Pendiente**:
+- Reemplazar los ~80 strings hardcoded en page.js, modales y hooks por `t('key')`. Hacerlo incrementalmente componente por componente para no romper nada.
+- Considerar plurals (`{count} tareas` vs `{count} tarea`) si se complica con count.
+- Server-side: pushes son siempre en español por ahora; pasar locale en subscription metadata si se requiere bilingüe.
+
+**Decisión de diseño**: NO usar next-intl. Para 2 usuarios y 2 idiomas, ~50 LOC custom es más simple y evita middleware + reorganización de rutas con `[locale]` segments.
+
+---
+
+## M30 — original spec con next-intl (archivada)
 
 **Estimación**: 4 horas
 
