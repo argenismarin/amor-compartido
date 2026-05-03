@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { formatDateDisplay } from '@/lib/dates';
+import { fetchJson } from '@/lib/api';
 
 // Tarjeta de una tarea con checkbox, prioridad, subtareas, reacciones y acciones.
 //
@@ -33,6 +34,74 @@ export default function TaskCard({
   const [sendingReaction, setSendingReaction] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+
+  // Comments: cargados lazy cuando el usuario expande el hilo
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+
+  const loadComments = useCallback(async () => {
+    try {
+      const data = await fetchJson(`/api/comments?taskId=${task.id}`);
+      setComments(Array.isArray(data) ? data : []);
+      setCommentsLoaded(true);
+    } catch (err) {
+      console.error('Error loading comments:', err);
+      setCommentsLoaded(true);
+    }
+  }, [task.id]);
+
+  useEffect(() => {
+    if (showComments && !commentsLoaded) loadComments();
+  }, [showComments, commentsLoaded, loadComments]);
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    const body = newComment.trim();
+    if (!body || sendingComment) return;
+    setSendingComment(true);
+    // Optimistic
+    const tempId = `temp-${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      task_id: task.id,
+      author_id: currentUserId,
+      body,
+      created_at: new Date().toISOString(),
+      author_name: 'Tu',
+    };
+    setComments((prev) => [...prev, optimistic]);
+    setNewComment('');
+    try {
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: task.id, author_id: currentUserId, body }),
+      });
+      if (!res.ok) throw new Error('Server error');
+      const data = await res.json();
+      setComments((prev) => prev.map((c) => (c.id === tempId ? { ...optimistic, ...data.comment } : c)));
+    } catch (err) {
+      console.error('Error posting comment:', err);
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setNewComment(body);
+    } finally {
+      setSendingComment(false);
+    }
+  };
+
+  const handleCommentDelete = async (commentId) => {
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    try {
+      await fetch(`/api/comments/${commentId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Error deleting comment:', err);
+      // No hay rollback porque ya borramos optimisticamente — si falla
+      // el usuario puede recargar.
+    }
+  };
 
   // Determine if assigned by Jenifer (pink) or Argenis (burgundy)
   const isFromJenifer = assignedByName?.toLowerCase().includes('jenifer');
@@ -130,7 +199,71 @@ export default function TaskCard({
                 + Pasos
               </button>
             )}
+            <button
+              type="button"
+              className="task-meta-item comments-toggle"
+              onClick={() => setShowComments((s) => !s)}
+              aria-expanded={showComments}
+              aria-label={showComments ? 'Ocultar comentarios' : 'Ver comentarios'}
+            >
+              💬{comments.length > 0 ? ` ${comments.length}` : ''}
+            </button>
           </div>
+
+          {showComments && (
+            <div className="comments-section">
+              {!commentsLoaded ? (
+                <p className="comments-loading">Cargando…</p>
+              ) : comments.length === 0 ? (
+                <p className="comments-empty">Aún no hay comentarios. Sé el primero 💕</p>
+              ) : (
+                <ul className="comments-list">
+                  {comments.map((c) => (
+                    <li key={c.id} className="comment-item">
+                      <div className="comment-author">
+                        <span className="comment-avatar">{c.author_avatar || '💬'}</span>
+                        <strong>{c.author_name || 'Anon'}</strong>
+                        <time className="comment-time">{formatDateDisplay(c.created_at)}</time>
+                      </div>
+                      <div className="comment-body-row">
+                        <p className="comment-body">{c.body}</p>
+                        {c.author_id === currentUserId && (
+                          <button
+                            type="button"
+                            className="comment-delete"
+                            onClick={() => handleCommentDelete(c.id)}
+                            aria-label="Eliminar comentario"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form className="comment-add-form" onSubmit={handleCommentSubmit}>
+                <input
+                  type="text"
+                  className="comment-add-input"
+                  placeholder="Escribe un comentario…"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  disabled={sendingComment}
+                  aria-label="Nuevo comentario"
+                  maxLength={2000}
+                />
+                <button
+                  type="submit"
+                  className="comment-add-btn"
+                  disabled={sendingComment || !newComment.trim()}
+                  aria-label="Enviar comentario"
+                >
+                  ↵
+                </button>
+              </form>
+            </div>
+          )}
 
           {/* Subtareas (lista + input) cuando expandidas */}
           {showSubtasks && onSubtaskAdd && (

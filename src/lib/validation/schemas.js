@@ -132,6 +132,14 @@ export const specialDateSchema = z.object({
   label: optionalTrimmedString(100),
 });
 
+// ─── Comments ───────────────────────────────────────────────────────
+
+export const createCommentSchema = z.object({
+  task_id: positiveInt,
+  author_id: positiveInt,
+  body: trimmedString(2000),
+});
+
 // ─── Subtasks ───────────────────────────────────────────────────────
 
 export const createSubtaskSchema = z.object({

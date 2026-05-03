@@ -356,6 +356,21 @@ export async function initDatabase() {
     await query('INSERT INTO AppChecklist_app_usage (first_use) VALUES (CURRENT_DATE)');
   }
 
+  // Comments: hilo de notas/comentarios por tarea entre la pareja.
+  await query(`
+    CREATE TABLE IF NOT EXISTS AppChecklist_comments (
+      id SERIAL PRIMARY KEY,
+      task_id INT NOT NULL REFERENCES AppChecklist_tasks(id) ON DELETE CASCADE,
+      author_id INT NOT NULL REFERENCES AppChecklist_users(id),
+      body TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_comments_task ON AppChecklist_comments(task_id, created_at);
+  `);
+
   // Activity log: registro de eventos importantes para auditoria y feed.
   // - actor_id: quien hizo la accion (NULL = system/cron)
   // - action: 'task.create' | 'task.complete' | 'task.delete' | 'task.restore' |
