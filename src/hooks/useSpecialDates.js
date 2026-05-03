@@ -36,20 +36,28 @@ export default function useSpecialDates(showToast) {
     }
   }, []);
 
-  // Detecta si HOY (Bogotá) coincide con alguna fecha especial guardada
+  // Detecta si HOY (Bogotá) coincide con alguna fecha especial guardada.
+  //
+  // Comparamos por strings MM-DD para evitar problemas de zona horaria.
+  // Antes usábamos `new Date(specialDate.date)` (que parsea como UTC si
+  // viene "YYYY-MM-DD") junto con `today.getDate()` (zona local). Cliente
+  // en TZ distinta al backend podía celebrar el día anterior o siguiente.
   const checkTodaySpecialDate = useCallback(() => {
-    const today = new Date();
-    const todayMonth = today.getMonth() + 1;
-    const todayDay = today.getDate();
+    // Local date string YYYY-MM-DD (independiente de la TZ del cliente).
+    const now = new Date();
+    const todayLocal =
+      now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+    const todayMD = todayLocal.slice(5); // "MM-DD"
 
-    for (const specialDate of specialDates) {
-      const dateObj = new Date(specialDate.date);
-      if (dateObj.getMonth() + 1 === todayMonth && dateObj.getDate() === todayDay) {
-        setTodaySpecialDate(specialDate);
-        return;
-      }
-    }
-    setTodaySpecialDate(null);
+    const match = specialDates.find((sd) => {
+      if (!sd.date) return false;
+      // sd.date puede venir como "YYYY-MM-DD" o "YYYY-MM-DDTHH:mm:ss…"
+      // Tomamos los chars 5-10 que corresponden a "MM-DD" en ambos casos.
+      return String(sd.date).slice(5, 10) === todayMD;
+    });
+    setTodaySpecialDate(match || null);
   }, [specialDates]);
 
   const saveSpecialDate = useCallback(
