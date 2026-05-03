@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne, ensureDatabase } from '@/lib/db';
+import { query, ensureDatabase } from '@/lib/db';
 import { getBogotaDate } from '@/lib/timezone';
+import { specialDateSchema, validateBody } from '@/lib/validation/schemas';
 
 // Helper: Parsea una fecha de forma segura (evita problemas de zona horaria)
 const parseDateSafe = (dateStr) => {
@@ -73,11 +74,12 @@ export async function GET() {
 export async function POST(request) {
   try {
     await ensureDatabase();
-    const { type, date, user_id, label } = await request.json();
-
-    if (!type || !date) {
-      return NextResponse.json({ error: 'type and date are required' }, { status: 400 });
+    const body = await request.json();
+    const { data, error } = validateBody(specialDateSchema, body);
+    if (error) {
+      return NextResponse.json({ error }, { status: 400 });
     }
+    const { type, date, user_id, label } = data;
 
     // Upsert special date
     await query(`

@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { query, ensureDatabase } from '@/lib/db';
+import { updateUserSchema, validateBody } from '@/lib/validation/schemas';
 
 export async function GET() {
   try {
     await ensureDatabase();
-    const users = await query('SELECT * FROM AppChecklist_users ORDER BY id');
+    // Listar columnas explícitas: si en el futuro se agrega una columna
+    // sensible (password_hash, email, etc.) no se filtra al cliente.
+    const users = await query(
+      'SELECT id, name, avatar_emoji FROM AppChecklist_users ORDER BY id'
+    );
     return NextResponse.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -14,7 +19,12 @@ export async function GET() {
 
 export async function PUT(request) {
   try {
-    const { id, name, avatar_emoji } = await request.json();
+    const body = await request.json();
+    const { data, error } = validateBody(updateUserSchema, body);
+    if (error) {
+      return NextResponse.json({ error }, { status: 400 });
+    }
+    const { id, name, avatar_emoji } = data;
     await query(
       'UPDATE AppChecklist_users SET name = $1, avatar_emoji = $2 WHERE id = $3',
       [name, avatar_emoji, id]

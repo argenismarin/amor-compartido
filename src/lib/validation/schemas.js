@@ -20,10 +20,24 @@ const optionalTrimmedString = (max) =>
 // cacheados del service worker del PWA (que aún no tienen el fix del
 // hook) siguen enviando '', así que el servidor tiene que tolerar esa
 // forma para no devolver 400.
+//
+// El regex anterior `/^\d{4}-\d{2}-\d{2}/` (sin `$`) aceptaba fechas
+// inválidas como "2024-13-45" o "2024-01-01-extra", que luego rompían
+// PostgreSQL con un 500. Ahora exigimos formato exacto + validamos que
+// el día/mes existan realmente (no más Feb 30, no más mes 13).
 const dateString = z
   .union([
     z.literal('').transform(() => null),
-    z.string().regex(/^\d{4}-\d{2}-\d{2}/),
+    z.string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato debe ser YYYY-MM-DD')
+      .refine((s) => {
+        const [y, m, d] = s.split('-').map(Number);
+        if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+        // Round-trip: si construir Date(y, m-1, d) no devuelve los mismos
+        // componentes, la fecha era inválida (ej: Feb 30 → Mar 2).
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+      }, 'Fecha inválida'),
     z.null(),
   ])
   .optional();
@@ -74,6 +88,14 @@ export const updateTaskSchema = z.object({
   expected_updated_at: z.string().nullable().optional(),
 });
 
+// ─── Users ──────────────────────────────────────────────────────────
+
+export const updateUserSchema = z.object({
+  id: positiveInt,
+  name: trimmedString(100),
+  avatar_emoji: z.string().max(20),
+});
+
 // ─── Projects ───────────────────────────────────────────────────────
 
 export const createProjectSchema = z.object({
@@ -95,6 +117,19 @@ export const updateProjectSchema = z.object({
   // Si el cliente lo envía, el UPDATE valida que el updated_at actual
   // coincida; si no, devuelve 409 conflict.
   expected_updated_at: z.string().nullable().optional(),
+});
+
+// ─── Special dates ──────────────────────────────────────────────────
+
+// Tipos válidos: el frontend solo usa 'anniversary' y 'birthday' (ver
+// SettingsModal.jsx). Si en el futuro se agregan más tipos (custom,
+// meeting, etc.) hay que ampliar este enum y validarlos en el banner
+// de page.js.
+export const specialDateSchema = z.object({
+  type: z.enum(['anniversary', 'birthday']),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato debe ser YYYY-MM-DD'),
+  user_id: optionalPositiveInt,
+  label: optionalTrimmedString(100),
 });
 
 // ─── Subtasks ───────────────────────────────────────────────────────
