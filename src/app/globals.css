@@ -1,3 +1,59 @@
+/* ============================================================================
+ * AMOR COMPARTIDO — globals.css (3913+ líneas)
+ *
+ * TABLA DE CONTENIDOS — ctrl+F para saltar a una sección.
+ *
+ *   1.  TOKENS Y RESET ........................ línea 27   (:root vars, *, focus)
+ *   2.  ARGENIS THEME OVERRIDES ............... línea 54   ([data-user="argenis"])
+ *   3.  TASK CARD COLORS BY ASSIGNER .......... línea 150  (.from-jenifer / argenis)
+ *   4.  COLLAPSIBLE COLORS .................... línea 176
+ *   5.  HEADER ................................ línea 211
+ *   6.  MAIN + PROGRESS SECTION ............... línea 281
+ *   7.  TABS .................................. línea 354
+ *   8.  COLLAPSIBLE SECTION ................... línea 387
+ *   9.  TASK CARDS + SUBTASKS ................. línea 460
+ *   10. FAB ................................... línea 807
+ *   11. MODALS (genérico + form) .............. línea 853
+ *   12. FORMS (input/textarea/select/priority) línea 929
+ *   13. EMPTY STATE + LOADING ................. línea 1139
+ *   14. MOBILE OPTIMIZATIONS + PWA SAFE AREAS . línea 1184
+ *   15. TOAST NOTIFICATIONS ................... línea 1221
+ *   16. OFFLINE BADGE ......................... línea 1336
+ *   17. CONFIRM DIALOG ........................ línea 1382
+ *   18. BUTTON DISABLED + TASK CARD ANIM ...... línea 1464
+ *   19. COLLAPSIBLE HEADER AS BUTTON .......... línea 1510
+ *   20. BREAKPOINTS (tablet, desktop D6) ...... línea 1528
+ *   21. FLOATING HEARTS + CONFETTI ............ línea 1578
+ *   22. CELEBRATION BANNER .................... línea 1697
+ *   23. SPECIAL DATE BANNER + STREAK BADGE .... línea 1754
+ *   24. HEADER ACTIONS ........................ línea 1802
+ *   25. TASK TOOLBAR (search + sort) .......... línea 1843
+ *   26. QUICK ADD ............................. línea 1944
+ *   27. CATEGORY FILTER + SELECTOR ............ línea 2023
+ *   28. RECURRENCE SELECTOR ................... línea 2096
+ *   29. TASK CARD ENHANCEMENTS (reaction) ..... línea 2129
+ *   30. ACHIEVEMENT MODALS .................... línea 2203
+ *   31. HISTORY MODAL ......................... línea 2351
+ *   32. SETTINGS MODAL ........................ línea 2432
+ *   33. DARK MODE (general) ................... línea 2525
+ *   34. MESIVERSARIO BANNER + INFO ............ línea 2890
+ *   35. LOVE STATS, NOTIFICATION TOGGLE ....... línea 2955
+ *   36. STREAK FIRE + ACHIEVEMENT SPECIAL ..... línea 3074
+ *   37. DARK MODE (componentes nuevos) ........ línea 3106
+ *   38. SKELETON LOADERS ...................... línea 3160
+ *   39. PROJECTS VIEW + CARD .................. línea 3246
+ *   40. PROJECT DETAIL VIEW ................... línea 3491
+ *   41. LOOSE TASKS + ARCHIVED PROJECTS ....... línea 3584
+ *   42. PROJECT SELECTOR (form) + EMOJI/COLOR  línea 3727
+ *   43. DARK MODE (projects) .................. línea 3818
+ *   44. PREFERS-REDUCED-MOTION (D1) ........... línea 3896
+ *
+ * NOTA: Splitting físico en módulos (tokens.css, layout.css, etc.) está en
+ * backlog. El riesgo de regresión por cambios de cascade order al partir
+ * archivos sin visual regression testing fue considerado mayor que el
+ * beneficio de organización. Mantener TOC actualizado al agregar secciones.
+ * ============================================================================ */
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
