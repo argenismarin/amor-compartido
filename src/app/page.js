@@ -104,6 +104,10 @@ export default function Home() {
   const [projectFormData, setProjectFormData] = useState({
     name: '', description: '', emoji: '📁', color: '#6366f1', due_date: ''
   });
+  // isSavingProject está separado de isSaving (de useTasks) para que el
+  // spinner del modal de proyecto no se contamine con guardados de tareas
+  // (y viceversa). Antes ambos compartían isSaving y se desincronizaban.
+  const [isSavingProject, setIsSavingProject] = useState(false);
 
   // History state
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -350,7 +354,7 @@ export default function Home() {
     tasksLoading,
     togglingTaskId,
     showModal, setShowModal,
-    editingTask,
+    editingTask, setEditingTask,
     formData, setFormData,
     isSaving,
     quickAddText, setQuickAddText,
@@ -384,12 +388,14 @@ export default function Home() {
     refreshProjects: fetchProjects,
   });
 
-  // Polling: refresca cada 5s las funciones del hook + projects
+  // Polling: refresca cada 5s. Solo fetch de projects cuando estás en
+  // esa tab — antes corría siempre y consumía ancho de banda + DB sin
+  // necesidad cuando el usuario está en "Mis tareas" o "Para pareja".
   usePolling(!!currentUser, 5000, () => {
     fetchTasks(false);
     fetchAssignedByOther();
-    fetchProjects();
     if (activeTab === 'projects') {
+      fetchProjects();
       if (selectedProject) {
         fetchProjectTasks(selectedProject);
       } else {
@@ -494,7 +500,136 @@ export default function Home() {
   }, [newAchievement, triggerConfetti]);
 
   const getOtherUser = () => users.find(u => u.id !== currentUser?.id);
-  
+
+  // ─── Handlers de proyectos ──────────────────────────────────────
+  // Estos handlers vivían inline en page.js antes de la refactorización
+  // del commit 3ade9dd (extract useTasks); fueron eliminados sin querer
+  // y la sección de proyectos quedó rota (ReferenceError al hacer click
+  // en cualquier acción). Acá los restauramos preservando el comportamiento
+  // original + 409 conflict handling con el endpoint de optimistic locking.
+
+  const openNewProject = useCallback(() => {
+    setEditingProject(null);
+    setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
+    setShowProjectModal(true);
+  }, []);
+
+  const openEditProject = useCallback((project) => {
+    setEditingProject(project);
+    setProjectFormData({
+      name: project.name,
+      description: project.description || '',
+      emoji: project.emoji || '📁',
+      color: project.color || '#6366f1',
+      due_date: project.due_date ? String(project.due_date).split('T')[0] : '',
+    });
+    setShowProjectModal(true);
+  }, []);
+
+  const handleProjectSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    setIsSavingProject(true);
+    const isEditing = !!editingProject;
+    const url = isEditing ? `/api/projects/${editingProject.id}` : '/api/projects';
+    const method = isEditing ? 'PUT' : 'POST';
+    try {
+      const payload = { ...projectFormData, due_date: projectFormData.due_date || null };
+      // Optimistic locking: si estamos editando, mandamos updated_at para
+      // que el server detecte conflictos (otra pestaña que guardó primero).
+      if (isEditing && editingProject?.updated_at) {
+        payload.expected_updated_at = editingProject.updated_at;
+      }
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 409) {
+        showToast('Tu pareja editó este proyecto, refrescamos los cambios', 'info', { duration: 5000 });
+        fetchProjects();
+        setShowProjectModal(false);
+        setEditingProject(null);
+        return;
+      }
+      if (!response.ok) throw new Error('Server error');
+      setShowProjectModal(false);
+      setEditingProject(null);
+      setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
+      fetchProjects();
+      fetchArchivedProjects();
+      showToast(isEditing ? 'Proyecto actualizado' : 'Proyecto creado 📁');
+    } catch (error) {
+      console.error('Error saving project:', error);
+      showToast('Error al guardar el proyecto', 'error');
+    } finally {
+      setIsSavingProject(false);
+    }
+  }, [editingProject, projectFormData, showToast]);
+
+  const handleProjectDelete = useCallback((projectId) => {
+    setConfirmDialog({
+      message: '¿Archivar este proyecto? Las tareas se conservan.',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          // PUT con is_archived: true en lugar de DELETE para que sea
+          // explícito (el DELETE sin ?permanent=true también archiva,
+          // pero esta forma es más legible).
+          const response = await fetch(`/api/projects/${projectId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_archived: true }),
+          });
+          if (!response.ok) throw new Error('Server error');
+          if (selectedProject === projectId) setSelectedProject(null);
+          fetchProjects();
+          fetchArchivedProjects();
+          showToast('Proyecto archivado');
+        } catch (error) {
+          console.error('Error archiving project:', error);
+          showToast('Error al archivar el proyecto', 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null),
+    });
+  }, [selectedProject, showToast]);
+
+  const handleRestoreProject = useCallback(async (projectId) => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_archived: false }),
+      });
+      if (!response.ok) throw new Error('Server error');
+      fetchProjects();
+      fetchArchivedProjects();
+      showToast('Proyecto restaurado 💕');
+    } catch (error) {
+      console.error('Error restoring project:', error);
+      showToast('Error al restaurar el proyecto', 'error');
+    }
+  }, [showToast]);
+
+  const handleDeleteProjectPermanently = useCallback((projectId, projectName) => {
+    setConfirmDialog({
+      message: `¿Eliminar "${projectName}" permanentemente? Esto borra el proyecto y todas sus tareas.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const response = await fetch(`/api/projects/${projectId}?permanent=true`, { method: 'DELETE' });
+          if (!response.ok) throw new Error('Server error');
+          fetchArchivedProjects();
+          showToast('Proyecto eliminado permanentemente');
+        } catch (error) {
+          console.error('Error deleting project:', error);
+          showToast('Error al eliminar el proyecto', 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null),
+    });
+  }, [showToast]);
+
   // Check if current user is Argenis (user id 2 or name contains Argenis)
   const isArgenis = currentUser?.name?.toLowerCase().includes('argenis') || currentUser?.id === 2;
 
@@ -1067,7 +1202,17 @@ export default function Home() {
           categories={categories}
           isSaving={isSaving}
           onSubmit={handleSubmit}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            // Reset al cerrar sin guardar para que la próxima apertura
+            // arranque limpia (antes los campos persistían entre abrir/cerrar).
+            setShowModal(false);
+            setEditingTask(null);
+            setFormData({
+              title: '', description: '', assigned_to: null, due_date: '',
+              priority: 'medium', category_id: null, project_id: null,
+              recurrence: null, is_shared: false,
+            });
+          }}
         />
       )}
 
@@ -1076,9 +1221,13 @@ export default function Home() {
           editingProject={editingProject}
           formData={projectFormData}
           setFormData={setProjectFormData}
-          isSaving={isSaving}
+          isSaving={isSavingProject}
           onSubmit={handleProjectSubmit}
-          onClose={() => setShowProjectModal(false)}
+          onClose={() => {
+            setShowProjectModal(false);
+            setEditingProject(null);
+            setProjectFormData({ name: '', description: '', emoji: '📁', color: '#6366f1', due_date: '' });
+          }}
         />
       )}
 
